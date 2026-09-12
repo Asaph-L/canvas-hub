@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Canvas Course Hub</title>
+<style>
+:root {
+  --bg:#f4f6fb; --card:#ffffff; --ink:#1f2430; --sub:#6b7280; --line:#e5e7eb; --acc:#4f46e5;
+  --badge-bg:#eef2ff; --badge-ink:#4f46e5;
+  --ok-bg:#ecfdf5; --ok-ink:#16a34a; --warn-bg:#fffbeb; --warn-ink:#d97706; --bad-bg:#fef2f2; --bad-ink:#dc2626;
+  --cat-bg:#f1f5f9; --msg-user:#eef2ff; --msg-bot:#f1f5f9;
+  --heat0:#eceff5; --heat1:#c7d2fe; --heat2:#818cf8; --heat3:#4f46e5; --code-bg:#111827; --code-ink:#d1d5db;
+  --shadow:0 1px 3px rgba(15,23,42,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0e1320; --card:#161d2e; --ink:#e7eaf3; --sub:#98a2b8; --line:#26304a; --acc:#8b8cf7;
+    --badge-bg:#20294a; --badge-ink:#a5b0fb;
+    --ok-bg:#10291d; --ok-ink:#4ade80; --warn-bg:#2c2410; --warn-ink:#fbbf24; --bad-bg:#2c1417; --bad-ink:#f87171;
+    --cat-bg:#1d2437; --msg-user:#1c2540; --msg-bot:#171e2e;
+    --heat0:#1b2334; --heat1:#2b3a63; --heat2:#4a5aa8; --heat3:#7c8bf0; --code-bg:#0b1020; --code-ink:#cbd5e1;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0e1320; --card:#161d2e; --ink:#e7eaf3; --sub:#98a2b8; --line:#26304a; --acc:#8b8cf7;
+  --badge-bg:#20294a; --badge-ink:#a5b0fb;
+  --ok-bg:#10291d; --ok-ink:#4ade80; --warn-bg:#2c2410; --warn-ink:#fbbf24; --bad-bg:#2c1417; --bad-ink:#f87171;
+  --cat-bg:#1d2437; --msg-user:#1c2540; --msg-bot:#171e2e;
+  --heat0:#1b2334; --heat1:#2b3a63; --heat2:#4a5aa8; --heat3:#7c8bf0; --code-bg:#0b1020; --code-ink:#cbd5e1;
+  --shadow:0 1px 3px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); transition:background .2s ease, color .2s ease; }
+.top { position:relative; background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff; padding:20px 32px 0; }
+.top h1 { margin:0 0 2px; font-size:22px; }
+.top .sub { opacity:.85; font-size:12px; margin-bottom:12px; padding-right:110px; }
+.hdrbtns { position:absolute; top:16px; right:20px; display:flex; gap:8px; }
+.hdrbtns button { background:rgba(255,255,255,.16); border:none; color:#fff; border-radius:10px; padding:6px 11px; cursor:pointer; font-size:14px; }
+.hdrbtns button:hover { background:rgba(255,255,255,.3); }
+.tabs { display:flex; gap:6px; overflow-x:auto; }
+.tabs button { border:none; background:rgba(255,255,255,.14); color:#fff; padding:9px 16px; font-size:14px; cursor:pointer; border-radius:10px 10px 0 0; white-space:nowrap; }
+.tabs button.active { background:var(--bg); color:var(--acc); font-weight:600; }
+.banner { background:var(--warn-bg); color:var(--warn-ink); padding:9px 20px; font-size:13px; text-align:center; }
+main { max-width:1100px; margin:22px auto; padding:0 20px 60px; }
+h2 { font-size:17px; margin:20px 0 12px; }
+h2.first { margin-top:0; }
+.card { background:var(--card); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); margin-bottom:14px; }
+.clickable { cursor:pointer; transition:box-shadow .15s ease; }
+.clickable:hover { box-shadow:0 4px 14px rgba(79,70,229,.18); }
+.pills { display:flex; gap:10px; margin:14px 0 4px; flex-wrap:wrap; }
+button.pill { cursor:pointer; border:none; font:inherit; color:#fff; background:rgba(255,255,255,.16); border-radius:999px; padding:6px 14px; font-size:13px; }
+button.pill:hover { background:rgba(255,255,255,.3); }
+.due-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--line); }
+.due-row:last-child { border-bottom:none; }
+.badge { flex:0 0 auto; background:var(--badge-bg); color:var(--badge-ink); border-radius:8px; padding:4px 10px; font-size:12px; font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.due-name { flex:1 1 auto; font-size:14px; }
+.due-time { flex:0 0 auto; color:var(--sub); font-size:12px; }
+.chip { border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; }
+.chip.ok { background:var(--ok-bg); color:var(--ok-ink); }
+.chip.bad { background:var(--bad-bg); color:var(--bad-ink); }
+.chip.warn { background:var(--warn-bg); color:var(--warn-ink); }
+.cat { background:var(--cat-bg); border-radius:8px; padding:4px 10px; font-size:12px; color:var(--sub); flex:0 0 auto; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:16px; }
+.course-card h3 { margin:0 0 4px; font-size:16px; }
+.course-card .code { color:var(--sub); font-size:12px; margin-bottom:10px; }
+.cats { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.cat-box { background:var(--cat-bg); border-radius:8px; padding:4px 10px; font-size:12px; color:var(--sub); }
+.bar { height:8px; background:var(--cat-bg); border-radius:999px; overflow:hidden; margin:6px 0 10px; }
+.bar > div { height:100%; background:var(--acc); border-radius:999px; }
+.mini { font-size:12px; color:var(--sub); margin:4px 0; }
+.mini a { color:var(--acc); text-decoration:none; margin-right:8px; }
+a { color:var(--acc); }
+ul.ann { margin:6px 0 0; padding-left:18px; }
+ul.ann li { font-size:12px; color:var(--sub); margin:3px 0; }
+.empty { color:var(--sub); font-size:13px; }
+.overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; }
+.dialog { background:var(--card); border-radius:16px; width:100%; max-width:720px; max-height:82vh; display:flex; flex-direction:column; overflow:hidden; }
+.dhead { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--line); }
+.dtitle { font-weight:600; font-size:15px; }
+.xbtn { border:none; background:none; font-size:16px; cursor:pointer; color:var(--sub); padding:4px 8px; }
+.dbody { overflow:auto; padding:16px 18px; }
+.mh { font-weight:600; font-size:13px; color:var(--sub); margin:14px 0 6px; }
+.mh:first-child { margin-top:0; }
+.chat-box { display:flex; flex-direction:column; height:60vh; }
+.chat-msgs { flex:1; overflow:auto; padding:10px 4px; }
+.msg { max-width:78%; margin:8px 0; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+.msg.user { background:var(--msg-user); margin-left:auto; }
+.msg.bot { background:var(--msg-bot); }
+.toolnote { font-size:12px; color:var(--sub); margin-top:6px; font-style:italic; }
+.chat-input { display:flex; gap:8px; padding:8px 4px 0; border-top:1px solid var(--line); }
+.chat-input textarea { flex:1; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:10px; padding:10px; font:inherit; font-size:14px; resize:none; height:52px; }
+.chat-input button, .btn { border:none; background:var(--acc); color:#fff; border-radius:10px; padding:10px 18px; cursor:pointer; font-size:14px; }
+.btn.ghost { background:var(--cat-bg); color:var(--ink); }
+.set-row { margin:14px 0; }
+.set-row label { display:block; font-size:13px; color:var(--sub); margin-bottom:6px; }
+.set-row input { width:100%; max-width:520px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:10px; padding:10px; font:inherit; font-size:14px; }
+.hint { font-size:12px; color:var(--sub); margin-top:4px; }
+pre.out { background:var(--code-bg); color:var(--code-ink); border-radius:10px; padding:12px; font-size:12px; overflow:auto; max-height:280px; white-space:pre-wrap; }
+.cal-head { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+.cal-label { color:var(--sub); font-size:13px; margin-left:auto; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; }
+.cal-col { background:var(--card); border-radius:12px; padding:10px; min-height:110px; box-shadow:var(--shadow); }
+.cal-col.today { outline:2px solid var(--acc); }
+.cal-day { font-size:12px; color:var(--sub); margin-bottom:8px; font-weight:600; }
+.cal-item { background:var(--msg-user); border-radius:8px; padding:6px 8px; margin-bottom:6px; }
+.cal-item.done { opacity:.55; }
+.cal-item-name { font-size:12px; line-height:1.4; }
+.cal-item-meta { font-size:11px; color:var(--sub); margin-top:2px; }
+.cal-empty { color:var(--sub); font-size:12px; }
+.cal-list-day { font-size:13px; font-weight:600; margin:12px 0 4px; }
+.heat-wrap { overflow-x:auto; padding-bottom:6px; }
+.heat-grid { display:grid; grid-template-rows:repeat(7, 16px); grid-auto-flow:column; gap:4px; min-width:max-content; }
+.heat-cell { width:16px; height:16px; border-radius:4px; background:var(--heat0); font-size:10px; color:#fff; display:flex; align-items:center; justify-content:center; }
+.heat-cell.lvl1 { background:var(--heat1); }
+.heat-cell.lvl2 { background:var(--heat2); }
+.heat-cell.lvl3 { background:var(--heat3); }
+.heat-cell.today { outline:2px solid var(--acc); outline-offset:1px; }
+.heat-legend { display:flex; gap:6px; align-items:center; color:var(--sub); font-size:11px; margin-top:10px; }
+footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
+@media (max-width: 760px) {
+  .top { padding:16px 14px 0; }
+  .top h1 { font-size:19px; }
+  .top .sub { font-size:11px; padding-right:0; }
+  main { margin:14px auto; padding:0 12px 40px; }
+  .grid { grid-template-columns:1fr; }
+  .cal-grid { grid-template-columns:1fr; }
+  .cal-col { min-height:auto; }
+  .due-row { flex-wrap:wrap; gap:6px; }
+  .due-name { flex:1 1 100%; }
+  .msg { max-width:92%; }
+  .chat-box { height:64vh; }
+  button.pill { padding:5px 11px; font-size:12px; }
+  .dialog { max-height:90vh; }
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="hdrbtns">
+    <button id="langBtn" onclick="toggleLang()">EN</button>
+    <button id="themeBtn" onclick="toggleTheme()">🌙</button>
+  </div>
+  <h1 data-i18n="appTitle">Canvas 课程管家</h1>
+  <div class="sub" id="sub" data-i18n="loading">正在加载…</div>
+  <div class="tabs">
+    <button class="active" data-tab="dash" onclick="showTab('dash')" data-i18n="tabDash">看板</button>
+    <button data-tab="cal" onclick="showTab('cal')" data-i18n="tabCal">日历</button>
+    <button data-tab="chat" onclick="showTab('chat')" data-i18n="tabChat">对话</button>
+    <button data-tab="set" onclick="showTab('set')" data-i18n="tabSet">设置</button>
+  </div>
+</div>
+<div id="banner" class="banner" style="display:none"></div>
+<main>
+  <section id="tab-dash">
+    <div class="pills" id="pills"></div>
+    <div id="naSec"></div>
+    <div id="dueSec"></div>
+    <div id="gridSec"></div>
+    <div id="nfSec"></div>
+  </section>
+  <section id="tab-cal" style="display:none">
+    <h2 class="first" data-i18n="weekTitle">周历</h2>
+    <div id="calView"></div>
+    <h2 data-i18n="heatTitle">热力图</h2>
+    <div class="card" id="calHeat"></div>
+    <h2 data-i18n="calListTitle">未来 30 天</h2>
+    <div class="card" id="calList"></div>
+  </section>
+  <section id="tab-chat" style="display:none">
+    <div class="card chat-box">
+      <div class="chat-msgs" id="msgs"></div>
+      <div class="chat-input">
+        <textarea id="input" data-i18n-ph="chatPlaceholder"></textarea>
+        <button onclick="sendChat()" data-i18n="send">发送</button>
+      </div>
+    </div>
+  </section>
+  <section id="tab-set" style="display:none">
+    <div class="card">
+      <h2 class="first" data-i18n="setApiTitle">API 配置</h2>
+      <div class="set-row">
+        <label data-i18n="dsKeyLabel">DeepSeek API Key</label>
+        <input type="password" id="dsKey" placeholder="sk-...">
+        <div class="hint" id="dsStatus"></div>
+      </div>
+      <div class="set-row">
+        <label data-i18n="dsModelLabel">模型</label>
+        <input id="dsModel" value="deepseek-chat">
+      </div>
+      <div class="set-row">
+        <label data-i18n="cvTokenLabel">Canvas API Token</label>
+        <input type="password" id="cvToken" placeholder="">
+        <div class="hint" id="cvStatus"></div>
+      </div>
+      <button class="btn" onclick="saveSettings()" data-i18n="save">保存设置</button>
+      <span id="saveMsg" class="hint"></span>
+    </div>
+    <div class="card">
+      <h2 class="first" data-i18n="manualTitle">手动操作</h2>
+      <div style="display:flex; gap:10px; flex-wrap:wrap">
+        <button class="btn" onclick="doRun('sync')" data-i18n="runSync">立即同步</button>
+        <button class="btn" onclick="doRun('daily')" data-i18n="runDaily">完整更新</button>
+        <button class="btn ghost" onclick="doRun('dashboard')" data-i18n="runDashboard">重生成仪表盘</button>
+        <button class="btn ghost" onclick="doRun('due')" data-i18n="runDue">查看截止</button>
+      </div>
+      <div id="runState" class="hint" style="margin:10px 0"></div>
+      <pre class="out" id="runOut" style="display:none"></pre>
+    </div>
+    <div class="card">
+      <h2 class="first" data-i18n="feishuTitle">飞书入口</h2>
+      <p class="hint"><span data-i18n="feishuBase">Base 看板：</span><a id="baseLink" href="#" target="_blank"></a></p>
+      <p class="hint" data-i18n="feishuHint2">日历与消息</p>
+    </div>
+  </section>
+</main>
+<footer id="footer"></footer>
+<script>
+var I18N = {
+  zh: {
+    appTitle: 'Canvas 课程管家', loading: '正在加载…',
+    tabDash: '📊 看板', tabCal: '📅 日历', tabChat: '💬 对话', tabSet: '⚙️ 设置',
+    subPrefix: '数据来源：Canvas API · 同步于 ', subSuffix: ' · 点击统计和卡片查看明细',
+    nextTitle: '🎯 下一步做什么（按 紧急度×权重 排序）',
+    nextEmpty: '暂无未完成的截止任务 🎉（作业发布后这里会出现行动清单）',
+    dueTitle: '⏰ 未来 10 天截止', dueEmpty: '暂无临近截止的作业 🎉',
+    coursesTitle: '📁 课程总览（点击卡片看详情）', newFilesTitle: '🆕 最近 7 天新文件', noNewFiles: '暂无新文件。',
+    noFiles: '暂无文件', noAssignments: '暂无作业',
+    pillCourses: '课程 ', pillFiles: '文件 ', pillDue: '10 天内截止 ', pillPending: '未提交 ',
+    progress: '作业进度：', currentScore: '当前成绩：', needAtLeast: ' 需 ≥', safeSuffix: '% 才稳（按当前水平，目标 ',
+    nextDue: '下一次截止：', recentDownloads: '最近下载：', announcements: '公告',
+    assessmentTitle: '评分组成（来自大纲）', chipSubmitted: '已提交', chipOverdue: '已过期', chipUrgent: '紧急',
+    chipPending: '未提交', chipNoDue: '无截止', chipTodo: '待考', chipEarned: '已得 ', open: '打开',
+    weekTitle: '📅 周历（截止与作业）', heatTitle: '🔥 截止热力图', calListTitle: '📌 未来 30 天清单',
+    prevWeek: '‹ 上一周', thisWeek: '回到本周', nextWeek: '下一周 ›',
+    metricDue: '📌 截止密度', metricFiles: '📥 文件更新', legendLess: '少', legendMore: '多',
+    heatNote: '· 覆盖前 4 周至后 12 周，共 ', heatNoteDue: ' 个截止（含已提交）', heatNoteFiles: ' 个文件更新',
+    calEmpty30: '未来 30 天没有截止任务 🎉',
+    chatPlaceholder: '问我课程问题，或说「帮我更新一下」「今天有什么 due」…（Enter 发送，Shift+Enter 换行）',
+    send: '发送', thinking: '思考中…',
+    setApiTitle: '🔑 API 配置',
+    dsKeyLabel: 'DeepSeek API Key（用于「对话」智能助手，保存在本机，不对外发送）',
+    dsModelLabel: 'DeepSeek 模型',
+    cvTokenLabel: 'Canvas API Token（替换后立即生效，保存到本机 secrets.json）',
+    save: '保存设置', saved: '✅ 已保存',
+    dsConfigured: '✅ 已配置 DeepSeek Key', dsMissing: '⚠️ 未配置 DeepSeek Key（对话功能不可用）',
+    cvConfigured: '✅ 已配置 Canvas Token', cvMissing: '⚠️ 未配置 Canvas Token',
+    manualTitle: '🛠 手动操作', runSync: '立即同步', runDaily: '完整更新', runDashboard: '重生成仪表盘', runDue: '查看截止',
+    running: '执行中：', runningHint: ' …（完整更新约 2 分钟，请耐心等待）', done: '✅ 完成', failed: '❌ 失败',
+    reqFailed: '请求失败：', loadFailed: '加载失败：',
+    feishuTitle: '🔗 飞书入口', feishuBase: 'Base 看板：', openBase: '打开 Canvas 课程中心', noBase: '（尚未创建飞书 Base）',
+    feishuHint2: '日历：飞书「日历」应用；消息：飞书里的机器人会话',
+    footer: '本地服务 ', footerTail: ' · 数据来自 Canvas API',
+    demoBanner: '📦 演示数据（DEMO）· 执行 node cli.mjs demo --off 退出演示',
+    empty: '—', toggleLang: 'EN', days: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+    assignTitle: '作业（', closeParen: '）', ptsSuffix: ' 分'
+  },
+  en: {
+    appTitle: 'Canvas Course Hub', loading: 'Loading…',
+    tabDash: '📊 Dashboard', tabCal: '📅 Calendar', tabChat: '💬 Chat', tabSet: '⚙️ Settings',
+    subPrefix: 'Source: Canvas API · synced at ', subSuffix: ' · click stats and cards for details',
+    nextTitle: '🎯 What to do next (urgency × weight)',
+    nextEmpty: 'No pending deadlines 🎉 (an action list appears once assignments are published)',
+    dueTitle: '⏰ Due within 10 days', dueEmpty: 'Nothing due soon 🎉',
+    coursesTitle: '📁 Courses (click a card for details)', newFilesTitle: '🆕 New files in the last 7 days', noNewFiles: 'No new files.',
+    noFiles: 'No files yet', noAssignments: 'No assignments',
+    pillCourses: 'Courses ', pillFiles: 'Files ', pillDue: 'Due in 10d ', pillPending: 'Pending ',
+    progress: 'Assignments: ', currentScore: 'Current score: ', needAtLeast: ' needs ≥', safeSuffix: '% to stay safe (at current level, target ',
+    nextDue: 'Next deadline: ', recentDownloads: 'Recent downloads: ', announcements: 'Announcements',
+    assessmentTitle: 'Assessment components (from syllabus)', chipSubmitted: 'Submitted', chipOverdue: 'Overdue', chipUrgent: 'Urgent',
+    chipPending: 'Not submitted', chipNoDue: 'No due date', chipTodo: 'Pending', chipEarned: 'Earned ', open: 'Open',
+    weekTitle: '📅 Week view (deadlines)', heatTitle: '🔥 Deadline heatmap', calListTitle: '📌 Next 30 days',
+    prevWeek: '‹ Prev', thisWeek: 'This week', nextWeek: 'Next ›',
+    metricDue: '📌 Deadline density', metricFiles: '📥 File activity', legendLess: 'Less', legendMore: 'More',
+    heatNote: '· 4 weeks back to 12 ahead, total ', heatNoteDue: ' deadlines (incl. submitted)', heatNoteFiles: ' file updates',
+    calEmpty30: 'No deadlines in the next 30 days 🎉',
+    chatPlaceholder: 'Ask about your courses, or say "update my data"… (Enter to send, Shift+Enter for newline)',
+    send: 'Send', thinking: 'Thinking…',
+    setApiTitle: '🔑 API settings',
+    dsKeyLabel: 'DeepSeek API key (for the chat assistant; stored locally, never sent elsewhere)',
+    dsModelLabel: 'DeepSeek model',
+    cvTokenLabel: 'Canvas API token (saved locally to secrets.json, takes effect immediately)',
+    save: 'Save', saved: '✅ Saved',
+    dsConfigured: '✅ DeepSeek key configured', dsMissing: '⚠️ No DeepSeek key (chat unavailable)',
+    cvConfigured: '✅ Canvas token configured', cvMissing: '⚠️ No Canvas token',
+    manualTitle: '🛠 Manual actions', runSync: 'Sync now', runDaily: 'Full update', runDashboard: 'Rebuild dashboard', runDue: 'Check deadlines',
+    running: 'Running: ', runningHint: ' … (a full update takes about 2 minutes)', done: '✅ done', failed: '❌ failed',
+    reqFailed: 'Request failed: ', loadFailed: 'Failed to load: ',
+    feishuTitle: '🔗 Feishu', feishuBase: 'Base dashboard: ', openBase: 'Open the course dashboard', noBase: '(no Feishu Base yet)',
+    feishuHint2: 'Calendar: the Feishu Calendar app; Messages: the bot chat in Feishu',
+    footer: 'Local service ', footerTail: ' · data from Canvas API',
+    demoBanner: '📦 Demo data · run "node cli.mjs demo --off" to exit',
+    empty: '—', toggleLang: '中', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    assignTitle: 'Assignments (', closeParen: ')', ptsSuffix: ' pts'
+  }
+};
+var LANG = localStorage.getItem('ch-lang') || 'zh';
+var DATA = null;
+var calWeekStart = null;
+var heatMetric = 'due';
+var sessionId = localStorage.getItem('ch-sid') || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+localStorage.setItem('ch-sid', sessionId);
+
+function t(key) { var d = I18N[LANG] || I18N.zh; return d[key] != null ? d[key] : (I18N.zh[key] != null ? I18N.zh[key] : key); }
+function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function fmtSize(b) { if (!b && b !== 0) return ''; if (b < 1048576) return Math.round(b / 1024) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; }
+function fmt(days) {
+  if (days < 0) return LANG === 'en' ? (Math.ceil(-days) + 'd overdue') : ('已过期 ' + Math.ceil(-days) + ' 天');
+  if (days < 1) { var h = Math.max(0, Math.round(days * 24)); return LANG === 'en' ? (h <= 0 ? 'due now' : (h + 'h left')) : (h <= 0 ? '即将截止' : '剩 ' + h + ' 小时'); }
+  var d = Math.floor(days), hh = Math.round((days - d) * 24);
+  return LANG === 'en' ? (d + 'd' + (hh ? ' ' + hh + 'h' : '') + ' left') : ('剩 ' + d + ' 天' + (hh ? ' ' + hh + ' 小时' : ''));
+}
+function fileHref(p) { return '/files?path=' + encodeURIComponent(p); }
+function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function mdLite(s) {
+  var x = escHtml(s);
+  x = x.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  var lines = x.split('\n');
+  var out = [];
+  var inList = false;
+  for (var i = 0; i < lines.length; i++) {
+    var m = /^(\s*)[-*]\s+(.*)$/.exec(lines[i]);
+    if (m) { if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + m[2] + '</li>'); continue; }
+    if (inList) { out.push('</ul>'); inList = false; }
+    out.push(lines[i] || '<br>');
+  }
+  if (inList) out.push('</ul>');
+  return out.join('<br>');
+}
+function applyLang(lang) {
+  LANG = lang || LANG;
+  localStorage.setItem('ch-lang', LANG);
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'zh';
+  document.querySelectorAll('[data-i18n]').forEach(function (node) { node.textContent = t(node.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function (node) { node.placeholder = t(node.getAttribute('data-i18n-ph')); });
+  document.getElementById('langBtn').textContent = t('toggleLang');
+  document.getElementById('footer').textContent = t('footer') + location.host + t('footerTail');
+  if (DATA) { renderDash(); renderCalTab(); }
+}
+function toggleLang() { applyLang(LANG === 'zh' ? 'en' : 'zh'); }
+function applyTheme(th) {
+  if (th) document.documentElement.setAttribute('data-theme', th);
+  else document.documentElement.removeAttribute('data-theme');
+  var dark = th ? th === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  var cur = document.documentElement.getAttribute('data-theme');
+  var isDark = cur ? cur === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var next = isDark ? 'light' : 'dark';
+  localStorage.setItem('ch-theme', next);
+  applyTheme(next);
+}
+function openModal(title, node) {
+  var ov = document.createElement('div'); ov.className = 'overlay';
+  var dlg = document.createElement('div'); dlg.className = 'dialog';
+  var head = document.createElement('div'); head.className = 'dhead';
+  head.appendChild(el('div', 'dtitle', title));
+  var x = document.createElement('button'); x.className = 'xbtn'; x.textContent = '✕';
+  x.onclick = function () { ov.remove(); };
+  head.appendChild(x);
+  var body = document.createElement('div'); body.className = 'dbody';
+  body.appendChild(node);
+  dlg.appendChild(head); dlg.appendChild(body); ov.appendChild(dlg);
+  ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+  function esc(e) { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', esc); } }
+  document.addEventListener('keydown', esc);
+  document.body.appendChild(ov);
+}
+function statusChip(d) {
+  if (d.submission && d.submission.submitted_at) return el('span', 'chip ok', t('chipSubmitted'));
+  if (d.days < 0) return el('span', 'chip bad', t('chipOverdue'));
+  if (d.days < 2) return el('span', 'chip bad', t('chipUrgent'));
+  return el('span', 'chip warn', t('chipPending'));
+}
+function dueRow(d, showCourse) {
+  var row = el('div', 'due-row');
+  if (showCourse) row.appendChild(el('span', 'badge', d.course));
+  row.appendChild(el('span', 'due-name', d.name));
+  row.appendChild(statusChip(d));
+  row.appendChild(el('span', 'due-time', fmt(d.days) + ' · ' + d.dueLabel));
+  return row;
+}
+function fileRow(f, showCourse) {
+  var row = el('div', 'due-row');
+  if (showCourse) row.appendChild(el('span', 'badge', f.course || ''));
+  row.appendChild(el('span', 'cat', f.category || ''));
+  row.appendChild(el('span', 'due-name', f.name));
+  var a = document.createElement('a'); a.href = fileHref(f.path); a.target = '_blank'; a.textContent = t('open');
+  row.appendChild(a);
+  row.appendChild(el('span', 'due-time', fmtSize(f.size)));
+  return row;
+}
+function courseModal(c) {
+  var wrap = document.createElement('div');
+  wrap.appendChild(el('div', 'code', c.code + ' · ' + c.fullName));
+  wrap.appendChild(el('div', 'mh', t('assignTitle') + c.assignments.length + t('closeParen')));
+  if (!c.assignments.length) wrap.appendChild(el('div', 'empty', t('noAssignments')));
+  else {
+    var list = c.assignments.slice().sort(function (a, b) { return String(a.due_at || '9999').localeCompare(String(b.due_at || '9999')); });
+    var box = el('div', 'card');
+    list.forEach(function (a) {
+      var row = el('div', 'due-row');
+      row.appendChild(el('span', 'due-name', a.name));
+      if (a.due_at) {
+        row.appendChild(statusChip({ submission: a.submission, days: (new Date(a.due_at).getTime() - Date.now()) / 86400000 }));
+        row.appendChild(el('span', 'due-time', a.dueLabel));
+      } else row.appendChild(el('span', 'chip warn', t('chipNoDue')));
+      if (a.points != null) row.appendChild(el('span', 'due-time', a.points + t('ptsSuffix')));
+      box.appendChild(row);
+    });
+    wrap.appendChild(box);
+  }
+  if (c.assessment && (c.assessment.components || []).length) {
+    wrap.appendChild(el('div', 'mh', t('assessmentTitle')));
+    var abox = el('div', 'card');
+    c.assessment.components.forEach(function (comp) {
+      var row = el('div', 'due-row');
+      row.appendChild(el('span', 'badge', comp.weight + '%'));
+      row.appendChild(el('span', 'due-name', comp.name));
+      if (comp.earnedPct != null) row.appendChild(el('span', 'chip ok', t('chipEarned') + comp.earnedPct + '%'));
+      else if (comp.reqIfOthersAvg != null) row.appendChild(el('span', 'chip warn', '≥ ' + comp.reqIfOthersAvg + '%'));
+      else row.appendChild(el('span', 'chip warn', t('chipTodo')));
+      abox.appendChild(row);
+    });
+    wrap.appendChild(abox);
+  }
+  ['讲义', '作业', '阅读', '其他'].forEach(function (cat) {
+    var fs2 = c.files.filter(function (f) { return f.category === cat; });
+    if (!fs2.length) return;
+    wrap.appendChild(el('div', 'mh', cat + ' (' + fs2.length + ')'));
+    var box2 = el('div', 'card');
+    fs2.forEach(function (f) { box2.appendChild(fileRow(f, false)); });
+    wrap.appendChild(box2);
+  });
+  if (c.announcements.length) {
+    wrap.appendChild(el('div', 'mh', t('announcements') + ' (' + c.announcements.length + ')'));
+    var ul = el('ul', 'ann');
+    c.announcements.forEach(function (a) { ul.appendChild(el('li', '', '📢 ' + a.title + (a.posted_at ? ' (' + a.posted_at.slice(0, 10) + ')' : ''))); });
+    wrap.appendChild(ul);
+  }
+  return wrap;
+}
+function renderDash() {
+  document.getElementById('sub').textContent = t('subPrefix') + (DATA.syncedAt || '-') + t('subSuffix');
+  var pills = document.getElementById('pills');
+  pills.innerHTML = '';
+  function pill(label, node) {
+    var b = document.createElement('button'); b.className = 'pill'; b.textContent = label;
+    b.onclick = function () { openModal(label, node); };
+    return b;
+  }
+  function courseListModal() {
+    var wrap = document.createElement('div');
+    DATA.courses.forEach(function (c) {
+      var row = el('div', 'due-row clickable');
+      row.appendChild(el('span', 'badge', c.code));
+      row.appendChild(el('span', 'due-name', c.folder));
+      row.appendChild(el('span', 'due-time', c.files.length + ' / ' + c.assignments.length));
+      row.onclick = function () { openModal(c.folder, courseModal(c)); };
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+  function dueModal() {
+    var wrap = document.createElement('div');
+    if (!DATA.dues.length) wrap.appendChild(el('div', 'empty', t('dueEmpty')));
+    else DATA.dues.forEach(function (d) { wrap.appendChild(dueRow(d, true)); });
+    return wrap;
+  }
+  function pendingModal() {
+    var wrap = document.createElement('div');
+    if (!DATA.pendingList.length) wrap.appendChild(el('div', 'empty', t('dueEmpty')));
+    else DATA.pendingList.forEach(function (d) { wrap.appendChild(dueRow(d, true)); });
+    return wrap;
+  }
+  function filesModal() {
+    var wrap = document.createElement('div');
+    DATA.courses.forEach(function (c) {
+      wrap.appendChild(el('div', 'mh', c.folder + ' (' + c.files.length + ')'));
+      var box = el('div', 'card');
+      if (!c.files.length) box.appendChild(el('div', 'empty', t('noFiles')));
+      c.files.forEach(function (f) { box.appendChild(fileRow(f, false)); });
+      wrap.appendChild(box);
+    });
+    return wrap;
+  }
+  pills.appendChild(pill(t('pillCourses') + DATA.courses.length, courseListModal()));
+  pills.appendChild(pill(t('pillFiles') + DATA.totalFiles, filesModal()));
+  pills.appendChild(pill(t('pillDue') + DATA.dues.length, dueModal()));
+  pills.appendChild(pill(t('pillPending') + DATA.pendingList.length, pendingModal()));
+
+  var naSec = document.getElementById('naSec');
+  naSec.innerHTML = '';
+  naSec.appendChild(el('h2', '', t('nextTitle')));
+  var naCard = el('div', 'card');
+  if (!DATA.nextActions || !DATA.nextActions.length) naCard.appendChild(el('div', 'empty', t('nextEmpty')));
+  else DATA.nextActions.slice(0, 6).forEach(function (a) {
+    var row = el('div', 'due-row');
+    row.appendChild(el('span', 'badge', a.course));
+    row.appendChild(el('span', 'due-name', a.name));
+    if (a.weight) row.appendChild(el('span', 'cat', a.weight));
+    row.appendChild(statusChip({ submission: null, days: a.days }));
+    row.appendChild(el('span', 'due-time', fmt(a.days) + ' · ' + a.dueLabel));
+    naCard.appendChild(row);
+  });
+  naSec.appendChild(naCard);
+
+  var dueSec = document.getElementById('dueSec');
+  dueSec.innerHTML = '';
+  dueSec.appendChild(el('h2', '', t('dueTitle')));
+  var dueCard = el('div', 'card');
+  if (!DATA.dues.length) dueCard.appendChild(el('div', 'empty', t('dueEmpty')));
+  DATA.dues.forEach(function (d) { dueCard.appendChild(dueRow(d, true)); });
+  dueSec.appendChild(dueCard);
+
+  var gridSec = document.getElementById('gridSec');
+  gridSec.innerHTML = '';
+  gridSec.appendChild(el('h2', '', t('coursesTitle')));
+  var grid = el('div', 'grid');
+  DATA.courses.forEach(function (c) {
+    var card = el('div', 'card course-card clickable');
+    card.onclick = function () { openModal(c.folder, courseModal(c)); };
+    card.appendChild(el('h3', '', c.folder));
+    card.appendChild(el('div', 'code', c.code));
+    var cats = el('div', 'cats');
+    ['讲义', '作业', '阅读', '其他'].forEach(function (k) { if (c.byCat[k]) cats.appendChild(el('span', 'cat-box', k + ' ' + c.byCat[k])); });
+    if (!Object.keys(c.byCat).length) cats.appendChild(el('span', 'cat-box', t('noFiles')));
+    card.appendChild(cats);
+    var total = c.assignments.length;
+    var done = c.assignments.filter(function (a) { return a.submission && a.submission.submitted_at; }).length;
+    card.appendChild(el('div', 'mini', t('progress') + done + ' / ' + total));
+    var bar = el('div', 'bar');
+    var fill = el('div');
+    fill.style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+    bar.appendChild(fill);
+    card.appendChild(bar);
+    if (c.grades && c.grades.current_score != null) card.appendChild(el('div', 'mini', t('currentScore') + c.grades.current_score + '%' + (c.grades.current_grade ? ' (' + c.grades.current_grade + ')' : '')));
+    (c.assessment ? c.assessment.components || [] : []).forEach(function (comp) {
+      if (comp.reqIfOthersAvg != null) card.appendChild(el('div', 'mini', '⚠️ ' + comp.name + t('needAtLeast') + comp.reqIfOthersAvg + t('safeSuffix') + (c.safety ? c.safety.target : 60) + ')'));
+    });
+    var next = c.assignments.filter(function (a) { return a.due_at && !(a.submission && a.submission.submitted_at) && new Date(a.due_at).getTime() > Date.now(); }).sort(function (a, b) { return a.due_at.localeCompare(b.due_at); })[0];
+    if (next) card.appendChild(el('div', 'mini', t('nextDue') + next.name + ' · ' + next.dueLabel));
+    var recents = c.files.filter(function (f) { return f.downloadedAt; }).sort(function (a, b) { return String(b.downloadedAt).localeCompare(String(a.downloadedAt)); }).slice(0, 3);
+    if (recents.length) {
+      var tt = el('div', 'mini', t('recentDownloads'));
+      recents.forEach(function (f) {
+        var a = document.createElement('a'); a.href = fileHref(f.path); a.target = '_blank'; a.textContent = f.name;
+        tt.appendChild(a);
+      });
+      card.appendChild(tt);
+    }
+    if (c.announcements.length) {
+      var ul = el('ul', 'ann');
+      c.announcements.slice(0, 3).forEach(function (a) { ul.appendChild(el('li', '', '📢 ' + a.title)); });
+      card.appendChild(ul);
+    }
+    grid.appendChild(card);
+  });
+  gridSec.appendChild(grid);
+
+  var nfSec = document.getElementById('nfSec');
+  nfSec.innerHTML = '';
+  nfSec.appendChild(el('h2', '', t('newFilesTitle')));
+  var nfCard = el('div', 'card');
+  if (!DATA.newFiles.length) nfCard.appendChild(el('div', 'empty', t('noNewFiles')));
+  DATA.newFiles.slice(0, 30).forEach(function (f) { nfCard.appendChild(fileRow(f, true)); });
+  nfSec.appendChild(nfCard);
+}
+function allEvents() {
+  var out = [];
+  DATA.courses.forEach(function (c) {
+    c.assignments.forEach(function (a) {
+      if (!a.due_at) return;
+      out.push({ course: c.folder, name: a.name, ts: new Date(a.due_at).getTime(), submitted: !!(a.submission && a.submission.submitted_at) });
+    });
+  });
+  out.sort(function (x, y) { return x.ts - y.ts; });
+  return out;
+}
+function hkDateKey(ts) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ts));
+}
+function startOfWeek(date) {
+  var d = new Date(date);
+  var diff = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function renderCalendar() {
+  var root = document.getElementById('calView');
+  root.innerHTML = '';
+  var events = allEvents();
+  if (!calWeekStart) calWeekStart = startOfWeek(new Date());
+  var head = el('div', 'cal-head');
+  var prev = el('button', 'btn ghost', t('prevWeek'));
+  prev.onclick = function () { calWeekStart.setDate(calWeekStart.getDate() - 7); renderCalendar(); };
+  var todayBtn = el('button', 'btn', t('thisWeek'));
+  todayBtn.onclick = function () { calWeekStart = startOfWeek(new Date()); renderCalendar(); };
+  var next = el('button', 'btn ghost', t('nextWeek'));
+  next.onclick = function () { calWeekStart.setDate(calWeekStart.getDate() + 7); renderCalendar(); };
+  var end = new Date(calWeekStart); end.setDate(end.getDate() + 6);
+  var label = el('span', 'cal-label', (calWeekStart.getMonth() + 1) + '/' + calWeekStart.getDate() + ' – ' + (end.getMonth() + 1) + '/' + end.getDate());
+  head.appendChild(prev); head.appendChild(todayBtn); head.appendChild(next); head.appendChild(label);
+  root.appendChild(head);
+  var todayKey = hkDateKey(Date.now());
+  var grid = el('div', 'cal-grid');
+  var WD = t('days');
+  for (var i = 0; i < 7; i++) {
+    var day = new Date(calWeekStart);
+    day.setDate(day.getDate() + i);
+    var key = hkDateKey(day.getTime() + 12 * 3600000);
+    var col = el('div', 'cal-col' + (key === todayKey ? ' today' : ''));
+    col.appendChild(el('div', 'cal-day', WD[i] + ' ' + (day.getMonth() + 1) + '/' + day.getDate()));
+    var dayEvents = events.filter(function (e) { return hkDateKey(e.ts) === key; });
+    if (!dayEvents.length) col.appendChild(el('div', 'cal-empty', t('empty')));
+    dayEvents.forEach(function (e) {
+      var item = el('div', 'cal-item' + (e.submitted ? ' done' : ''));
+      item.appendChild(el('div', 'cal-item-name', e.name));
+      var when = new Intl.DateTimeFormat(LANG === 'en' ? 'en-GB' : 'zh-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(e.ts));
+      item.appendChild(el('div', 'cal-item-meta', when + ' · ' + e.course + (e.submitted ? ' · ' + t('chipSubmitted') : '')));
+      col.appendChild(item);
+    });
+    grid.appendChild(col);
+  }
+  root.appendChild(grid);
+}
+function renderHeatmap() {
+  var root = document.getElementById('calHeat');
+  root.innerHTML = '';
+  var events = allEvents();
+  var counts = {};
+  if (heatMetric === 'due') {
+    events.forEach(function (e) { var k = hkDateKey(e.ts); counts[k] = (counts[k] || 0) + 1; });
+  } else {
+    DATA.courses.forEach(function (c) {
+      c.files.forEach(function (f) {
+        var ts = f.downloadedAt || f.updatedAt;
+        if (!ts) return;
+        var k = hkDateKey(new Date(ts).getTime());
+        counts[k] = (counts[k] || 0) + 1;
+      });
+    });
+  }
+  var switcher = el('div', 'cal-head');
+  var b1 = el('button', heatMetric === 'due' ? 'btn' : 'btn ghost', t('metricDue'));
+  b1.onclick = function () { heatMetric = 'due'; renderHeatmap(); };
+  var b2 = el('button', heatMetric === 'files' ? 'btn' : 'btn ghost', t('metricFiles'));
+  b2.onclick = function () { heatMetric = 'files'; renderHeatmap(); };
+  switcher.appendChild(b1); switcher.appendChild(b2);
+  root.appendChild(switcher);
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var start = startOfWeek(today); start.setDate(start.getDate() - 7 * 4);
+  var wrap = el('div', 'heat-wrap');
+  var grid = el('div', 'heat-grid');
+  var total = 0;
+  for (var w = 0; w < 16; w++) {
+    for (var d = 0; d < 7; d++) {
+      var day = new Date(start); day.setDate(start.getDate() + w * 7 + d);
+      var key = hkDateKey(day.getTime() + 12 * 3600000);
+      var n = counts[key] || 0;
+      total += n;
+      var cell = el('div', 'heat-cell' + (n ? ' lvl' + Math.min(n, 3) : ''));
+      cell.title = key + ': ' + n;
+      if (n) cell.textContent = String(n);
+      if (hkDateKey(Date.now()) === key) cell.classList.add('today');
+      grid.appendChild(cell);
+    }
+  }
+  wrap.appendChild(grid);
+  root.appendChild(wrap);
+  var legend = el('div', 'heat-legend');
+  legend.appendChild(el('span', '', t('legendLess')));
+  ['', 'lvl1', 'lvl2', 'lvl3'].forEach(function (c) { legend.appendChild(el('div', 'heat-cell ' + c)); });
+  legend.appendChild(el('span', '', t('legendMore')));
+  legend.appendChild(el('span', '', t('heatNote') + total + (heatMetric === 'due' ? t('heatNoteDue') : t('heatNoteFiles'))));
+  root.appendChild(legend);
+}
+function renderCalList() {
+  var root = document.getElementById('calList');
+  root.innerHTML = '';
+  var now = Date.now();
+  var events = allEvents().filter(function (e) { return e.ts > now - 86400000 && e.ts < now + 30 * 86400000; });
+  if (!events.length) { root.appendChild(el('div', 'empty', t('calEmpty30'))); return; }
+  var grouped = {};
+  events.forEach(function (e) { var k = hkDateKey(e.ts); (grouped[k] = grouped[k] || []).push(e); });
+  Object.keys(grouped).sort().forEach(function (k) {
+    root.appendChild(el('div', 'cal-list-day', k));
+    grouped[k].forEach(function (e) {
+      var row = el('div', 'due-row');
+      row.appendChild(el('span', 'badge', e.course));
+      row.appendChild(el('span', 'due-name', e.name));
+      var when = new Intl.DateTimeFormat(LANG === 'en' ? 'en-GB' : 'zh-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(e.ts));
+      row.appendChild(el('span', 'due-time', when));
+      if (e.submitted) row.appendChild(el('span', 'chip ok', t('chipSubmitted')));
+      root.appendChild(row);
+    });
+  });
+}
+function renderCalTab() { if (!DATA) return; renderCalendar(); renderHeatmap(); renderCalList(); }
+function loadState() {
+  fetch('/api/state').then(function (r) { return r.json(); }).then(function (d) {
+    DATA = d;
+    if (!localStorage.getItem('ch-lang') && d.lang) LANG = d.lang;
+    var banner = document.getElementById('banner');
+    if (d.demo) { banner.style.display = ''; banner.textContent = t('demoBanner'); } else { banner.style.display = 'none'; }
+    applyLang(LANG);
+  }).catch(function (e) { document.getElementById('sub').textContent = t('loadFailed') + e; });
+}
+function showTab(name) {
+  document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === name); });
+  ['dash', 'cal', 'chat', 'set'].forEach(function (x) {
+    document.getElementById('tab-' + x).style.display = x === name ? '' : 'none';
+  });
+  if (name === 'set') loadSettings();
+  if (name === 'cal') renderCalTab();
+}
+function addMsg(role, html) {
+  var box = document.getElementById('msgs');
+  var m = document.createElement('div');
+  m.className = 'msg ' + role;
+  m.innerHTML = html;
+  box.appendChild(m);
+  box.scrollTop = box.scrollHeight;
+  return m;
+}
+function sendChat() {
+  var input = document.getElementById('input');
+  var text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addMsg('user', escHtml(text));
+  var box = document.getElementById('msgs');
+  var bubble = document.createElement('div');
+  bubble.className = 'msg bot';
+  bubble.textContent = t('thinking');
+  box.appendChild(bubble);
+  box.scrollTop = box.scrollHeight;
+  var acc = '';
+  var note = '';
+  function paint() {
+    bubble.innerHTML = mdLite(acc) + (note ? '<div class="toolnote">' + escHtml(note) + '</div>' : '');
+    box.scrollTop = box.scrollHeight;
+  }
+  fetch('/api/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: sessionId, message: text, lang: LANG }),
+  }).then(function (resp) {
+    if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = '';
+    function pump() {
+      return reader.read().then(function (r) {
+        if (r.done) { loadState(); return; }
+        buf += decoder.decode(r.value, { stream: true });
+        var idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          var evt = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          var line = evt.trim();
+          if (line.indexOf('data:') !== 0) continue;
+          var j = null;
+          try { j = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
+          if (j.type === 'delta') { acc += j.text; note = ''; }
+          else if (j.type === 'status') { note = j.text; }
+          else if (j.type === 'done') { note = ''; }
+          paint();
+        }
+        return pump();
+      });
+    }
+    return pump();
+  }).catch(function (e) { bubble.innerHTML = mdLite(t('reqFailed') + e); });
+}
+document.getElementById('input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+function loadSettings() {
+  fetch('/api/settings').then(function (r) { return r.json(); }).then(function (d) {
+    document.getElementById('dsModel').value = d.model || 'deepseek-chat';
+    document.getElementById('dsStatus').textContent = d.deepseekKeySet ? t('dsConfigured') : t('dsMissing');
+    document.getElementById('cvStatus').textContent = d.canvasTokenSet ? t('cvConfigured') : t('cvMissing');
+    var link = document.getElementById('baseLink');
+    if (d.baseUrl) { link.href = d.baseUrl; link.textContent = t('openBase'); }
+    else { link.textContent = t('noBase'); link.removeAttribute('href'); }
+  });
+}
+function saveSettings() {
+  var body = {
+    deepseekApiKey: document.getElementById('dsKey').value,
+    model: document.getElementById('dsModel').value,
+    canvasToken: document.getElementById('cvToken').value,
+  };
+  fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function () {
+      document.getElementById('saveMsg').textContent = t('saved');
+      document.getElementById('dsKey').value = '';
+      document.getElementById('cvToken').value = '';
+      loadSettings();
+    });
+}
+function doRun(cmd) {
+  var st = document.getElementById('runState');
+  var out = document.getElementById('runOut');
+  st.textContent = t('running') + cmd + t('runningHint');
+  out.style.display = 'none';
+  fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      st.textContent = d.ok ? (t('done') + ' ' + cmd) : (t('failed') + ' ' + cmd);
+      out.style.display = '';
+      out.textContent = d.output || '';
+      loadState();
+    })
+    .catch(function (e) { st.textContent = t('reqFailed') + e; });
+}
+applyTheme(localStorage.getItem('ch-theme') || '');
+applyLang(LANG);
+loadState();
+loadSettings();
+</script>
+</body>
+</html>

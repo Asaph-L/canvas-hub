@@ -1,0 +1,15 @@
+# 个人数据与密钥（绝对不要提交）
+secrets.json
+config.json
+data/
+logs/
+out/dashboard/
+out/digest/
+out/web/*.png
+out/*.png
+LaunchAgents/
+dist/
+
+# 系统与依赖
+.DS_Store
+node_modules/
