@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { ROOT, hkTime } from './src/util.mjs';
 import { updateAssessment, matchComponent } from './src/syllabus.mjs';
 import { ensureCertificate, describeCertificate } from './src/cert.mjs';
-import { lanHosts, ensureToken, regenerateToken, tokenMatches, tokenFromRequest, isLoopback, isLocalNetwork, pemToDer, mobileConfig, helperPage } from './src/lan.mjs';
+import { lanHosts, localHostnames, isAllowedHost, ensureToken, regenerateToken, tokenMatches, tokenFromRequest, isLoopback, isLocalNetwork, pemToDer, mobileConfig, helperPage, generatePairCode, pairCodeMatches, certFingerprint } from './src/lan.mjs';
 import { qrSvg } from './src/qr.mjs';
 import { iconFor, MANIFEST } from './src/icons.mjs';
 
@@ -50,20 +50,60 @@ function setLanEnabled(v) {
 let tlsCache = null;
 function tlsContext() {
   if (tlsCache) return tlsCache;
-  const hosts = ['localhost', '127.0.0.1', ...lanHosts().map((h) => h.address)];
+  // 把 .local 名称也写进 SAN：手机上就能用固定地址（换 WiFi 不变）访问
+  const hosts = ['localhost', '127.0.0.1', ...lanHosts().map((h) => h.address), ...localHostnames()];
   const cert = ensureCertificate(TLS_DIR, hosts);
-  tlsCache = { key: cert.key, cert: cert.cert, caDer: cert.caDer, caPem: cert.caCertPem, hosts };
+  tlsCache = {
+    key: cert.key,
+    cert: cert.cert,
+    caDer: cert.caDer,
+    caPem: cert.caCertPem,
+    hosts,
+    caFingerprint: certFingerprint(cert.caDer),
+    leafFingerprint: cert.leafFingerprint || '',
+  };
   return tlsCache;
+}
+
+// ---- 6 位配对码（内存态，重启即失效）：手机存了书签、不想再扫码时用 ----
+const PAIR_CODE_TTL = 10 * 60 * 1000;
+const PAIR_CODE_MAX_TRIES = 5;
+const CLAIM_MAX_PER_WINDOW = 10;
+let pairCode = null;
+const claimLog = new Map();
+
+function activePairCode() {
+  if (!pairCode || pairCode.expires <= Date.now() || pairCode.tries >= PAIR_CODE_MAX_TRIES) {
+    pairCode = { code: generatePairCode(), expires: Date.now() + PAIR_CODE_TTL, tries: 0 };
+  }
+  return pairCode;
+}
+
+function claimAllowed(ip) {
+  const now = Date.now();
+  const rec = claimLog.get(ip);
+  if (!rec || rec.resetAt <= now) { claimLog.set(ip, { count: 1, resetAt: now + PAIR_CODE_TTL }); return true; }
+  rec.count++;
+  return rec.count <= CLAIM_MAX_PER_WINDOW;
+}
+
+function tryClaim(input) {
+  if (!pairCode || pairCode.expires <= Date.now() || pairCode.tries >= PAIR_CODE_MAX_TRIES) return false;
+  pairCode.tries++;
+  if (pairCodeMatches(input, pairCode.code)) { pairCode = null; return true; }
+  return false;
 }
 
 function lanUrls() {
   const hosts = lanHosts().map((h) => h.address);
   const ip = hosts[0] || '127.0.0.1';
+  const fixedHost = localHostnames()[0] || '';
   return {
     hosts,
     https: 'https://' + ip + ':' + LAN_HTTPS_PORT,
     helper: 'http://' + ip + ':' + LAN_HELPER_PORT,
     local: 'http://127.0.0.1:' + PORT,
+    fixed: fixedHost ? 'https://' + fixedHost + ':' + LAN_HTTPS_PORT : '',
   };
 }
 
@@ -388,8 +428,21 @@ async function handle(req, res, ctx) {
   const u = new URL(req.url, 'http://x');
   const p = decodeURIComponent(u.pathname);
   const loopback = isLoopback(req.socket.remoteAddress);
+  const mode = (ctx && ctx.mode) || 'local';
+
+  // 安全响应头：禁 iframe（防点击劫持）、禁外链脚本、不发 Referer
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=()');
+
+  // 防 DNS 重绑定：evil.com 可以解析到 127.0.0.1/内网 IP，此时浏览器视作同源，
+  // 从而读走 /api/pair 里的访问令牌。只接受本机名 / 私有网段字面量 / .local。
+  if (!isAllowedHost(req.headers.host, mode)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('403 主机名不被允许：请使用看板上显示的地址（局域网 IP 或 .local 名称）访问。');
+  }
   try {
     const token = ensureToken(DATA_DIR);
     const urls = lanUrls();
@@ -412,16 +465,43 @@ async function handle(req, res, ctx) {
     }
 
     // 助手端口（纯 HTTP）：只用于分发证书与安装说明
-    if (ctx && ctx.mode === 'helper') {
+    if (mode === 'helper') {
       if (p === '/' || p === '/index.html') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-        return res.end(helperPage({ httpsUrl: urls.https, hosts: urls.hosts, port: LAN_HELPER_PORT }));
+        return res.end(helperPage({
+          httpsUrl: urls.https,
+          hosts: urls.hosts,
+          port: LAN_HELPER_PORT,
+          fingerprint: tlsCache ? tlsCache.caFingerprint : '',
+        }));
       }
       res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('此端口仅用于分发证书，看板请访问 https://' + (urls.hosts[0] || '127.0.0.1') + ':' + LAN_HTTPS_PORT + '/');
     }
 
-    if (p === '/api/health') return sendJSON(res, 200, { ok: true, app: 'canvas-hub', version: VERSION, lan: lanEnabled() });
+    if (p === '/api/health') {
+      return sendJSON(res, 200, {
+        ok: true,
+        app: 'canvas-hub',
+        version: VERSION,
+        lan: lanEnabled(),
+        // 手机端可拿它核对「正在连接的证书」，与电脑上显示的一致才说明没有被中间人替换
+        tls: tlsCache ? { leaf: tlsCache.leafFingerprint, ca: tlsCache.caFingerprint } : null,
+      });
+    }
+
+    // 6 位配对码换令牌：手机端点（无需令牌，靠限速 + 一次性 + 10 分钟过期保护）
+    if (p === '/api/pair/claim' && req.method === 'POST') {
+      if (!loopback && !isLocalNetwork(req.socket.remoteAddress)) {
+        return sendJSON(res, 403, { ok: false, error: '只允许局域网访问' });
+      }
+      const ip = String(req.socket.remoteAddress || '');
+      if (!claimAllowed(ip)) return sendJSON(res, 429, { ok: false, error: '尝试过于频繁，请稍后再试' });
+      const body = await readBody(req);
+      if (!tryClaim(body.code)) return sendJSON(res, 401, { ok: false, error: '配对码不正确或已过期（请在电脑上重新查看）' });
+      issueTokenCookie(res, token, mode === 'lan');
+      return sendJSON(res, 200, { ok: true, token });
+    }
 
     // PWA 资源：图标运行时生成（仓库里不放二进制），清单动态输出
     if (ICON_ROUTES[p]) {
@@ -459,14 +539,21 @@ async function handle(req, res, ctx) {
     if (p === '/api/pair') {
       if (!loopback) return sendJSON(res, 403, { ok: false, error: '仅本机可见' });
       const pairUrl = urls.https + '/?t=' + token;
+      const tls = tlsCache;
+      const pc = activePairCode();
       return sendJSON(res, 200, {
         ok: true,
         enabled: lanEnabled(),
         local: urls.local,
         httpsUrl: urls.https,
         helperUrl: urls.helper,
+        fixedUrl: urls.fixed,
         pairUrl,
         token,
+        // 6 位配对码：手机存过书签、不想再扫码时，直接在手机上看板输入即可
+        code: pc.code,
+        codeExpiresIn: Math.max(0, Math.round((pc.expires - Date.now()) / 1000)),
+        fingerprint: { ca: tls ? tls.caFingerprint : '', leaf: tls ? tls.leafFingerprint : '' },
         // 二维码固定白底：深色主题下透明底会导致手机扫不出来
         qr: qrSvg(pairUrl, { ecc: 'M', light: '#ffffff' }),
         qrHelper: qrSvg(urls.helper, { ecc: 'M', light: '#ffffff' }),
@@ -551,15 +638,16 @@ async function handle(req, res, ctx) {
       res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Disposition': 'inline; filename*=UTF-8\'\'' + encodeURIComponent(path.basename(abs)) });
       return fs.createReadStream(abs).pipe(res);
     }
-    let file = p === '/' ? 'index.html' : p.slice(1);
-    if (!file.includes('/') || file.startsWith('out/web/')) file = path.basename(file);
-    const abs = path.join(WEB_DIR, file);
-    if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream' });
-      return fs.createReadStream(abs).pipe(res);
+    // 只用 basename 并做目录包含校验：否则 /..%2f..%2fsecrets.json 这类编码穿越
+    // 会绕过 path.join 直读到仓库根的 secrets.json / config.json
+    const file = p === '/' ? 'index.html' : path.basename(p);
+    const abs = path.resolve(WEB_DIR, file);
+    if (!abs.startsWith(WEB_DIR + path.sep) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('404');
     }
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('404');
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream' });
+    return fs.createReadStream(abs).pipe(res);
   } catch (e) {
     sendJSON(res, 500, { ok: false, error: String(e.message || e) });
   }

@@ -244,13 +244,15 @@ export function ensureCertificate(tlsDir, hosts) {
   }
 
   const caDer = new crypto.X509Certificate(caCertPem).raw;
+  const leafPem = fs.readFileSync(srvCertPath, 'utf8');
   return {
     key: fs.readFileSync(srvKeyPath, 'utf8'),
-    cert: fs.readFileSync(srvCertPath, 'utf8') + caCertPem,
+    cert: leafPem + caCertPem,
     caCertPem,
     caDer,
     caPath: caCertPath,
     hosts: wanted,
+    leafFingerprint: describeCertificate(leafPem).fingerprint,
   };
 }
 

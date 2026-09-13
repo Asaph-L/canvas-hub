@@ -27,7 +27,7 @@ function check(name, ok, detail) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function request(url, { method = 'GET', headers = {}, agent } = {}) {
+function request(url, { method = 'GET', headers = {}, body = null } = {}) {
   return new Promise((resolve) => {
     const u = new URL(url);
     const mod = u.protocol === 'https:' ? https : http;
@@ -50,6 +50,7 @@ function request(url, { method = 'GET', headers = {}, agent } = {}) {
     });
     req.on('error', (e) => resolve({ status: 0, error: String(e.message), headers: {}, body: '', raw: Buffer.alloc(0) }));
     req.on('timeout', () => { req.destroy(); resolve({ status: 0, error: 'timeout', headers: {}, body: '', raw: Buffer.alloc(0) }); });
+    if (body) req.write(body);
     req.end();
   });
 }
@@ -171,6 +172,45 @@ console.log('[6] 证书文件');
   check('生成 ca.pem / server.pem / server.key', ['ca.pem', 'server.pem', 'server.key'].every((f) => fs.existsSync(path.join(tlsDir, f))));
   const info = JSON.parse(fs.readFileSync(path.join(tlsDir, 'cert-info.json'), 'utf8'));
   check('证书 SAN 覆盖本机 IP', hosts.every((h) => info.hosts.includes(h)), JSON.stringify(info.hosts));
+}
+
+console.log('[7] 安全加固（路径穿越 / DNS 重绑定 / 响应头）');
+{
+  for (const p of ['/..%2f..%2fsecrets.json', '/..%2f..%2fconfig.json', '/..%2f..%2fdata%2fsettings.json']) {
+    const r = await request('http://127.0.0.1:' + PORT + p);
+    check('路径穿越被拦截 ' + p, r.status === 404, 'status=' + r.status);
+  }
+  for (const h of ['evil.example.com', 'evil.example.com:' + PORT, '127.0.0.1.nip.io']) {
+    const r = await request('http://127.0.0.1:' + PORT + '/api/pair', { headers: { Host: h } });
+    check('伪造 Host 被拒绝（' + h + '）', r.status === 403, 'status=' + r.status);
+  }
+  const home = await request('http://127.0.0.1:' + PORT + '/');
+  check('X-Frame-Options: DENY', String(home.headers['x-frame-options']).toUpperCase() === 'DENY');
+  const csp = String(home.headers['content-security-policy'] || '');
+  check('存在 CSP 且禁止被 iframe 嵌入', csp.includes("frame-ancestors 'none'"));
+  check('配对信息含证书指纹', !!(pair && pair.fingerprint && pair.fingerprint.ca));
+  check('配对信息含固定地址字段', !!pair && typeof pair.fixedUrl === 'string');
+}
+
+console.log('[8] 6 位配对码（限速 / 一次性）');
+{
+  const r = await request('http://127.0.0.1:' + PORT + '/api/pair');
+  let code = '';
+  try { code = JSON.parse(r.body).code; } catch {}
+  check('配对码为 6 位数字', /^[0-9]{6}$/.test(code), code);
+  if (!lanIp) {
+    console.log('  ⚠️ 跳过换取流程（本机没有私有网段地址）');
+  } else {
+    const base = 'https://' + lanIp + ':' + LAN_PORT;
+    const bad = await request(base + '/api/pair/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"code":"000000"}' });
+    check('错误配对码 → 401', bad.status === 401, 'status=' + bad.status);
+    const good = await request(base + '/api/pair/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    check('正确配对码 → 200 + 下发 Cookie', good.status === 200 && /chub_token=/.test(String(good.headers['set-cookie'])), 'status=' + good.status);
+    const reuse = await request(base + '/api/pair/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    check('配对码用一次即废 → 401', reuse.status === 401, 'status=' + reuse.status);
+    const files = await request(base + '/files?path=../../secrets.json');
+    check('/files 无令牌 → 401', files.status === 401, 'status=' + files.status);
+  }
 }
 
 console.log('');

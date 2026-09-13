@@ -10,6 +10,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { isPrivateIPv4 } from './cert.mjs';
 
 export function lanHosts() {
@@ -28,6 +29,41 @@ export function lanHosts() {
   return found
     .filter((x) => (seen.has(x.address) ? false : (seen.add(x.address), true)))
     .sort((a, b) => rank(a.address) - rank(b.address) || a.address.localeCompare(b.address));
+}
+
+/** 本机可能的 .local 名称（Bonjour / mDNS），用于证书 SAN 与 Host 白名单 */
+export function localHostnames() {
+  const out = [];
+  const add = (n) => {
+    const v = String(n || '').trim().toLowerCase();
+    if (v && !out.includes(v)) out.push(v);
+  };
+  if (process.platform === 'darwin') {
+    try {
+      const local = String(execFileSync('scutil', ['--get', 'LocalHostName'], { encoding: 'utf8', timeout: 3000 })).trim();
+      if (local) add(local.replace(/\.local$/i, '') + '.local');
+    } catch {}
+  }
+  const hn = os.hostname().toLowerCase();
+  if (hn) { add(hn.endsWith('.local') ? hn : hn + '.local'); add(hn); }
+  return out;
+}
+
+/**
+ * Host 头白名单 —— 防 DNS 重绑定。
+ * 攻击者可以让 evil.com 解析到 127.0.0.1 或内网 IP，此时浏览器认为请求同源，
+ * 于是能读到 /api/pair 里的访问令牌。所以只接受「本机名 / 私有网段字面量 / .local」。
+ */
+export function isAllowedHost(hostHeader, mode) {
+  const name = String(hostHeader || '').trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  const bare = name.replace(/:\d+$/, '');
+  if (!bare) return false;
+  const loopback = new Set(['localhost', '127.0.0.1', '::1']);
+  if (mode === 'local') return loopback.has(bare);
+  if (loopback.has(bare)) return true;
+  if (isPrivateIPv4(bare)) return true;
+  if (bare.endsWith('.local')) return true;
+  return localHostnames().includes(bare);
 }
 
 export function normalizeAddr(addr) {
@@ -89,6 +125,25 @@ export function tokenFromRequest(req, url) {
   return '';
 }
 
+// ---------------- 配对码 ----------------
+// 6 位一次性配对码：方便「不想再扫码」的场景（手机存了书签、或换了台设备）。
+// 安全约束：10 分钟过期、用掉即废、单个码最多试 5 次、每 IP 每 10 分钟限 10 次。
+
+export function generatePairCode() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+}
+
+export function pairCodeMatches(input, code) {
+  const a = Buffer.from(String(input == null ? '' : input).replace(/\D/g, '').padEnd(6, ' ').slice(0, 6));
+  const b = Buffer.from(String(code == null ? '' : code).padEnd(6, ' ').slice(0, 6));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** 证书指纹（SHA-256，冒号分隔大写）—— 手机端可用它核对证书有没有被替换 */
+export function certFingerprint(der) {
+  return crypto.createHash('sha256').update(der).digest('hex').toUpperCase().replace(/(..)(?=.)/g, '$1:');
+}
+
 // ---------------- 证书分发 ----------------
 
 export function pemToDer(pem) {
@@ -147,7 +202,7 @@ export function mobileConfig(caDer, hosts) {
 }
 
 /** 助手端口上的安装说明页（手机浏览器打开，指导装证书 + 扫码/点链接进看板） */
-export function helperPage({ httpsUrl, hosts, port }) {
+export function helperPage({ httpsUrl, hosts, port, fingerprint }) {
   const host = hosts[0] || '127.0.0.1';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const html = [];
@@ -171,6 +226,10 @@ export function helperPage({ httpsUrl, hosts, port }) {
   html.push('<a class="btn" href="/ca.crt">Android / 通用 .crt</a>');
   html.push('<p class="muted">iPhone：下载后到「设置 → 已下载描述文件」安装，再到「设置 → 通用 → 关于本机 → 证书信任设置」打开完全信任。</p>');
   html.push('<p class="muted">Android：设置 → 安全 → 加密与凭据 → 安装证书 → CA 证书，选择刚下载的文件。</p>');
+  if (fingerprint) {
+    html.push('<p class="muted">装好后请在手机的系统设置里核对该证书指纹（SHA-256），应与电脑看板上显示的一致：</p>');
+    html.push('<p><code>' + esc(fingerprint) + '</code></p>');
+  }
   html.push('</div>');
   html.push('<div class="card"><h2>第二步 · 打开看板</h2>');
   html.push('<p>安装证书后，回到<strong>电脑上的看板</strong> → 「设置 → 手机配对」→ 用手机扫那里的二维码。</p>');

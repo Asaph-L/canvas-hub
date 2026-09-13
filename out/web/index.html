@@ -150,6 +150,7 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
 .offlinebar { background:var(--warn-bg); color:var(--warn-ink); border-bottom:1px solid var(--line); padding:8px 20px; font-size:13px; text-align:center; }
 .banner.offline { background:var(--warn-bg); color:var(--warn-ink); }
 .pairneeded { border:1px solid var(--warn-ink); }
+.installbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; background:var(--badge-bg); color:var(--badge-ink); border-bottom:1px solid var(--line); padding:9px 16px; font-size:13px; line-height:1.5; }
 .pair-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-top:8px; }
 .qr-box { text-align:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; }
 .qr-box svg { width:200px; height:200px; display:block; margin:0 auto; }
@@ -183,9 +184,19 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
 <div id="banner" class="banner" style="display:none"></div>
 <div id="offlineBar" class="offlinebar" style="display:none"></div>
 <main>
+  <div id="installBar" class="installbar" style="display:none">
+    <span id="installBarText"></span>
+    <button class="btn ghost" id="installBarBtn" onclick="doInstall()" style="display:none" data-i18n="installBtn">安装到桌面</button>
+    <button class="btn ghost" onclick="dismissInstall()" data-i18n="installLater">以后再说</button>
+  </div>
   <div id="pairNeeded" class="card pairneeded" style="display:none">
     <h2 class="first" data-i18n="pairNeededTitle">🔒 需要配对</h2>
-    <p data-i18n="pairNeededBody">这台设备还没有访问令牌。请在电脑上打开看板 →「设置 → 手机配对」，用手机扫描二维码即可。</p>
+    <p data-i18n="pairNeededBody">在电脑上打开看板 →「设置 → 手机配对」，扫二维码；或把电脑上显示的 6 位配对码填在下面。</p>
+    <div class="copyline">
+      <input id="pairCodeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位配对码" style="flex:1 1 150px; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:19px; letter-spacing:.3em; text-align:center">
+      <button class="btn" onclick="submitPairCode()" data-i18n="pairSubmit">确定</button>
+    </div>
+    <div class="hint" id="pairCodeMsg" style="margin-top:8px"></div>
     <p class="hint" id="pairNeededHint"></p>
   </div>
   <section id="tab-dash">
@@ -273,10 +284,27 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
           <li data-i18n="pairTip3">进看板后用浏览器菜单「添加到主屏幕 / 安装应用」，之后没网也能打开最近一次同步的看板。</li>
         </ol>
         <div class="copyline">
+          <span class="hint" data-i18n="pairCodeLabel">6 位配对码</span>
+          <code id="pairCode" style="flex:0 0 auto; font-size:19px; letter-spacing:.3em">000000</code>
+          <span class="hint" id="pairCodeLeft"></span>
+          <button class="btn ghost" onclick="loadPair()" data-i18n="pairCodeNew">换一个</button>
+        </div>
+        <p class="hint" data-i18n="pairCodeNote">手机不用扫码时：打开看板的地址（顶部「固定地址」），在配对页输入这 6 位数字即可，10 分钟内有效、用一次即废。</p>
+        <div class="copyline">
+          <span class="hint" data-i18n="pairFixed">固定地址</span>
+          <code id="pairFixed"></code>
+          <button class="btn ghost" onclick="copyText('pairFixed')" data-i18n="copy">复制</button>
+        </div>
+        <div class="copyline">
           <span class="hint" data-i18n="pairToken">访问令牌</span>
           <code id="pairToken"></code>
           <button class="btn ghost" onclick="regenToken()" data-i18n="pairRegen">重新生成</button>
         </div>
+        <div class="copyline">
+          <span class="hint" data-i18n="pairFp">证书指纹</span>
+          <code id="pairFp" style="font-size:11px"></code>
+        </div>
+        <p class="hint" data-i18n="pairFpNote">装完证书后，可在手机系统设置里核对这个 SHA-256 指纹，一致才说明证书没被替换。</p>
         <p class="hint" data-i18n="pairNote">令牌只显示在这台电脑上：安装页和二维码里都不会泄露；关闭局域网访问后，手机端立即失效。</p>
       </div>
       <div id="pairHidden" class="hint" style="display:none" data-i18n="pairLocalOnly">手机配对只在电脑端（localhost）可见 —— 当前页面来自局域网，出于隐私考虑不显示令牌。</div>
@@ -340,7 +368,19 @@ var I18N = {
     pairLocalOnly: '手机配对只在电脑端（localhost）可见 —— 当前页面来自局域网，出于隐私考虑不显示令牌。',
     offlineBar: '⚠️ 离线模式 · 显示的是最近一次缓存的数据（联网后自动更新）',
     staleBar: '📦 当前显示缓存数据 · 点此刷新', refresh: '刷新',
-    pairNeededTitle: '🔒 需要配对', pairNeededBody: '这台设备还没有访问令牌。请在电脑上打开看板 →「设置 → 手机配对」，用手机扫描二维码即可。'
+    pairNeededTitle: '🔒 需要配对',
+    pairNeededBody: '在电脑上打开看板 →「设置 → 手机配对」，扫二维码；或把电脑上显示的 6 位配对码填在下面。',
+    pairSubmit: '确定', pairCodeNeed6: '请输入 6 位数字',
+    pairCodeOk: '✅ 配对成功，正在载入…', pairCodeBad: '❌ 配对码不正确或已过期',
+    pairCodeTooMany: '尝试过于频繁，请稍后再试',
+    pairCodeLabel: '6 位配对码', pairCodeNew: '换一个', pairCodeLeft: '剩余 ', pairCodeSec: ' 秒',
+    pairCodeNote: '手机不想扫码时：打开看板地址（下方「固定地址」），在配对页输入这 6 位数字即可，10 分钟内有效、用一次即废。',
+    pairFixed: '固定地址', pairFp: '证书指纹',
+    pairFpNote: '装完证书后，可在手机系统设置里核对这个 SHA-256 指纹，一致才说明证书没被替换。',
+    installBarText: '📲 把看板装到手机桌面：以后点图标就能打开，没网也能看。',
+    installBarIOS: '📲 iPhone 上点下方「分享」按钮 →「添加到主屏幕」，以后点桌面图标就能打开，离线也能看。',
+    installBarDone: '✅ 已装到手机桌面',
+    installBtn: '安装到桌面', installLater: '以后再说'
   },
   en: {
     appTitle: 'Canvas Course Hub', loading: 'Loading…',
@@ -391,7 +431,19 @@ var I18N = {
     pairLocalOnly: 'Phone pairing is only available on localhost — this page came over the LAN, so the token is hidden for privacy.',
     offlineBar: '⚠️ Offline · showing the last cached data (updates automatically when back online)',
     staleBar: '📦 Showing cached data · tap to refresh', refresh: 'Refresh',
-    pairNeededTitle: '🔒 Pairing required', pairNeededBody: 'This device has no access token yet. Open the dashboard on your computer → Settings → Phone pairing, then scan the QR code with your phone.'
+    pairNeededTitle: '🔒 Pairing required',
+    pairNeededBody: 'On your computer, open the dashboard → Settings → Phone pairing and scan the QR code — or type the 6-digit pairing code shown there below.',
+    pairSubmit: 'Confirm', pairCodeNeed6: 'Enter the 6 digits',
+    pairCodeOk: '✅ Paired, loading…', pairCodeBad: '❌ Wrong or expired pairing code',
+    pairCodeTooMany: 'Too many attempts, please try again later',
+    pairCodeLabel: '6-digit code', pairCodeNew: 'New code', pairCodeLeft: 'expires in ', pairCodeSec: 's',
+    pairCodeNote: 'No QR handy? Open the dashboard address (the "fixed address" below) and type these 6 digits on the pairing screen — valid for 10 minutes, single use.',
+    pairFixed: 'Fixed address', pairFp: 'Cert fingerprint',
+    pairFpNote: 'After installing the certificate, compare this SHA-256 fingerprint in your phone settings — they must match to rule out a swapped certificate.',
+    installBarText: '📲 Add the dashboard to your home screen: tap the icon from now on, and it works offline.',
+    installBarIOS: '📲 On iPhone tap the Share button → "Add to Home Screen"; afterwards the icon opens it, even offline.',
+    installBarDone: '✅ Added to your home screen',
+    installBtn: 'Add to home screen', installLater: 'Later'
   }
 };
 var LANG = localStorage.getItem('ch-lang') || 'zh';
@@ -951,6 +1003,38 @@ function doRun(cmd) {
 }
 // ---------- 手机配对 ----------
 var PAIR = null;
+var PAIR_EXPIRES = 0;
+var pairTick = null;
+function tickPairCode() {
+  var el = document.getElementById('pairCodeLeft');
+  if (!el) return;
+  clearTimeout(pairTick);
+  var left = Math.max(0, Math.round((PAIR_EXPIRES - Date.now()) / 1000));
+  el.textContent = left > 0 ? (t('pairCodeLeft') + left + t('pairCodeSec')) : '';
+  if (left > 0) pairTick = setTimeout(tickPairCode, 1000);
+}
+function submitPairCode() {
+  var input = document.getElementById('pairCodeInput');
+  var msg = document.getElementById('pairCodeMsg');
+  var code = (input.value || '').replace(/\D/g, '');
+  if (code.length !== 6) { msg.textContent = t('pairCodeNeed6'); return; }
+  msg.textContent = t('pairCodeOk');
+  fetch('/api/pair/claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code }),
+  }).then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+    .then(function (res) {
+      if (res.d && res.d.ok) {
+        msg.textContent = t('pairCodeOk');
+        try { localStorage.setItem('ch-token', res.d.token || ''); } catch (e) {}
+        setTimeout(function () { location.reload(); }, 400);
+        return;
+      }
+      msg.textContent = res.status === 429 ? t('pairCodeTooMany') : t('pairCodeBad');
+    })
+    .catch(function () { msg.textContent = t('reqFailed'); });
+}
 function loadPair() {
   return fetch('/api/pair').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
     var body = document.getElementById('pairBody');
@@ -976,6 +1060,12 @@ function loadPair() {
     document.getElementById('pairUrl').textContent = d.pairUrl || '';
     document.getElementById('helperUrl').textContent = d.helperUrl || '';
     document.getElementById('pairToken').textContent = d.token || '';
+    document.getElementById('pairFixed').textContent = d.fixedUrl || '（本机无 .local 名称，用上方局域网地址即可）';
+    document.getElementById('pairFp').textContent = (d.fingerprint && d.fingerprint.ca) || '（证书生成中）';
+    var codeEl = document.getElementById('pairCode');
+    codeEl.textContent = d.code || '------';
+    PAIR_EXPIRES = Date.now() + (d.codeExpiresIn || 0) * 1000;
+    tickPairCode();
   }).catch(function () {
     document.getElementById('pairBody').style.display = 'none';
     document.getElementById('pairHidden').style.display = '';
@@ -1025,6 +1115,61 @@ document.getElementById('banner').addEventListener('click', function () {
   if (this.classList.contains('offline')) loadState(true);
 });
 
+// ---------- 装到手机桌面 ----------
+var deferredInstall = null;
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function renderInstallBar() {
+  var bar = document.getElementById('installBar');
+  var txt = document.getElementById('installBarText');
+  var btn = document.getElementById('installBarBtn');
+  if (!bar) return;
+  var narrow = window.matchMedia && window.matchMedia('(max-width: 760px)').matches;
+  if (isStandalone() || localStorage.getItem('ch-install-dismiss') === '1') { bar.style.display = 'none'; return; }
+  if (deferredInstall) { txt.textContent = t('installBarText'); btn.style.display = ''; }
+  else if (isIOS()) { txt.textContent = t('installBarIOS'); btn.style.display = 'none'; }
+  else if (narrow) { txt.textContent = t('installBarText'); btn.style.display = 'none'; }
+  else { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+}
+function doInstall() {
+  if (!deferredInstall) { renderInstallBar(); return; }
+  deferredInstall.prompt();
+  deferredInstall.userChoice.then(function () { deferredInstall = null; renderInstallBar(); });
+}
+function dismissInstall() {
+  try { localStorage.setItem('ch-install-dismiss', '1'); } catch (e) {}
+  document.getElementById('installBar').style.display = 'none';
+}
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; renderInstallBar(); });
+window.addEventListener('appinstalled', function () {
+  deferredInstall = null;
+  try { localStorage.setItem('ch-install-dismiss', '1'); } catch (e) {}
+  renderInstallBar();
+});
+
+// ---------- 令牌兜底：Cookie 被清掉时用 localStorage 里的令牌（请求头）----------
+var RAW_FETCH = window.fetch.bind(window);
+window.fetch = function (input, init) {
+  try {
+    var url = typeof input === 'string' ? input : ((input && input.url) || '');
+    if (url.indexOf('/api/') === 0 || url.indexOf('/files') === 0) {
+      var tok = localStorage.getItem('ch-token');
+      if (tok) {
+        init = init || {};
+        var h = new Headers(init.headers || {});
+        if (!h.has('X-Canvas-Hub-Token')) h.set('X-Canvas-Hub-Token', tok);
+        init.headers = h;
+      }
+    }
+  } catch (e) {}
+  return RAW_FETCH(input, init);
+};
+
 // ---------- 离线看板（PWA）----------
 window.addEventListener('online', function () { checkConnectivity(); });
 window.addEventListener('offline', function () { setOffline(true); });
@@ -1048,6 +1193,7 @@ applyTheme(BOOT_THEME || localStorage.getItem('ch-theme') || '');
 applyLang(URL_PARAMS.get('lang') || LANG);
 loadState();
 loadSettings();
+renderInstallBar();
 if (BOOT_TAB) { setTimeout(function () { showTab(BOOT_TAB); }, 300); }
 </script>
 </body>

@@ -14,7 +14,7 @@
 
 **Everyone runs their own copy**: you supply your own Canvas token, all data stays on your machine, nothing is uploaded anywhere.
 
-📖 [中文说明](README.md)
+📖 [中文说明](README.md) · 🔒 [Security notes](SECURITY.md)
 
 ---
 
@@ -39,9 +39,9 @@
 | --- | --- |
 | ![Settings](docs/screenshots/settings.png) | ![Mobile](docs/screenshots/mobile.png) |
 
-| Phone pairing: install the cert, then scan to open |
-| --- |
-| ![Phone pairing](docs/screenshots/pairing.png) |
+| Phone pairing: cert, QR, 6-digit code | The dashboard on a phone (installable, offline) | Re-pairing screen on the phone |
+| --- | --- | --- |
+| ![Phone pairing](docs/screenshots/pairing.png) | ![Phone dashboard](docs/screenshots/phone-dashboard.png) | ![Phone pairing screen](docs/screenshots/phone-pairing.png) |
 
 > Screenshots use built-in demo data — run `node cli.mjs demo` to see the same on your machine.
 
@@ -109,6 +109,27 @@ The dashboard is useless when you are away from your desk. The phone build puts 
 3. **Open the dashboard** — scan the **right** QR code; the token is remembered automatically. Use the browser menu "Add to Home screen / Install app" and it keeps working offline
 
 > Why a certificate? Offline support needs a Service Worker, and browsers only allow that in a secure context. A LAN IP can never have a public certificate, so the app generates a **root certificate that belongs only to your computer** (10 years, restricted to private addresses such as `192.168.x.x`). Install it once on the phone — changing WiFi or IP does not require reinstalling it.
+
+### Getting back in later (three ways)
+
+You do not need to keep the QR code around. There are three ways back to the dashboard, **in order of preference**:
+
+1. **Add it to your home screen (best)** — on iPhone tap Share → "Add to Home Screen"; on Android use Chrome's menu → "Install app / Add to Home screen". After that it behaves like an app: **tap the icon to open it, and it works offline**, with no browser tabs to hunt through. The dashboard nudges you to do this.
+2. **Bookmark it** — the address is `https://<lan-ip>:8789/`. If your computer's `.local` name resolves, the "fixed address" on the pairing card (e.g. `https://your-mac.local:8789/`) **survives WiFi and IP changes** and is the better thing to bookmark.
+3. **Use the 6-digit code** — if the token is gone (cleared browser data, a new phone, or you clicked "Regenerate"), you do not need the QR again: open the same address and the pairing screen asks for the **6-digit code** shown under Settings → Phone pairing on the computer (valid 10 minutes, single use).
+
+> Why is the home screen better than a bookmark? On iOS only a home-screen web app gets the full offline cache and notifications (iOS 16.4+); on Android an installed PWA has its own storage, so clearing browser data does not log it out.
+
+### Security design
+
+See **[SECURITY.md](SECURITY.md)** for the full threat model and residual risks. Highlights:
+
+- `127.0.0.1` is unauthenticated; LAN access requires a **128-bit random token** and only accepts private-network sources
+- The token is only shown on the computer screen and is exchanged for an `HttpOnly` cookie immediately, removing it from the address bar
+- The `Host` header is validated (DNS-rebinding defence) and static files are containment-checked (blocks reading `secrets.json` via path traversal)
+- `X-Frame-Options: DENY` plus a CSP; all course data is rendered through `textContent`, chat output is escaped before Markdown is applied
+- The 6-digit pairing code is rate-limited, single-use and expires after 10 minutes
+- The SHA-256 fingerprint of the self-signed CA is shown on the pairing card and install page so it can be verified against the phone settings
 
 ### Privacy design
 
