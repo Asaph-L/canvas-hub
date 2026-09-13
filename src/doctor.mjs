@@ -83,8 +83,10 @@ export async function doctor() {
     const bin = larkBin();
     if (!fs.existsSync(bin) && bin === 'lark-cli') warn('未找到 lark-cli', 'npx @larksuite/cli@latest install');
     else {
-      const st = larkStatus();
+      let st = larkStatus();
+      if (!st.userReady) { await new Promise((r) => setTimeout(r, 2500)); st = larkStatus(); }  // 网络抖动时重试一次
       if (st.userReady) ok('飞书用户身份就绪：' + (st.userName || '（未知）'));
+      else if (!st.reachable) warn('飞书接口暂时不可达（网络问题？）', '稍后重试 node cli.mjs doctor');
       else warn('飞书未登录或授权过期', 'node cli.mjs lark-setup');
       const lj = path.join(ROOT, 'data', 'lark.json');
       if (fs.existsSync(lj)) ok('飞书 Base 已绑定（data/lark.json）');

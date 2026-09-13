@@ -143,6 +143,8 @@ Windows（PowerShell）：
 
 ## Windows 说明
 
+> 说明：Windows 支持已完整实现（安装脚本、计划任务、Toast 通知、纯 JS 的 PDF 解析），但作者主要在 macOS 上开发，**脚本尚未在真机 Windows 上跑过**。如果你在 Windows 上遇到问题，欢迎提 Issue，我会跟着修。
+
 - 定时任务用「任务计划程序」实现，会创建三个任务：**CanvasHub-Morning**（每天同步）、**CanvasHub-Evening**（截止检查）、**CanvasHub-Web**（每 5 分钟检查 Web 服务是否存活，等价于常驻）。可在开始菜单搜索「任务计划程序」查看。
 - 这些任务通过 VBS 包装以**隐藏窗口**方式运行，不会每 5 分钟弹一个黑框。
 - 系统通知使用 Windows 原生 Toast（无需安装任何模块）；如果没弹，检查「设置 → 系统 → 通知」里是否允许 PowerShell 通知。
