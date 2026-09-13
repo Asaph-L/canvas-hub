@@ -170,11 +170,20 @@ Canvas Token 过期了。在 Canvas → 账号 → 设置 → 已批准集成重
 **Q：Web 看板打不开？**
 先看端口是否被占用：macOS / Linux 用 `lsof -nP -i :8788`，Windows 用 `netstat -ano | findstr 8788`。被占用就改 `config.json` 的 `web.port`，然后重启服务（macOS：`launchctl kickstart -k gui/$(id -u)/com.canvashub.web`；Windows：在任务计划程序里运行 CanvasHub-Web）。
 
+**Q（Windows）：`git clone` 报 `Connection was reset` 连不上 GitHub？**
+如果你的机器靠系统代理（Clash / V2Ray 之类，形如 `127.0.0.1:2080`）上网，git **不会**读取 Windows 的 IE/系统代理设置，需要显式告诉它：
+
+    git config --global http.proxy  http://127.0.0.1:2080
+    git config --global https.proxy http://127.0.0.1:2080
+
+**Q（Windows）：`curl` / `Invoke-WebRequest` 报 schannel 凭证错误？**
+那是 Windows 系统 TLS 栈的问题，与本项目无关：**本项目的所有网络请求都走 Node 自带的 fetch（内置 OpenSSL 与 CA），不依赖 curl / schannel**。安装向导的 Canvas 校验与看板探活也都用 Node 完成，所以这类机器上功能完全正常。
+
 **Q（Windows）：看板打不开 / 打开是空白？**
-1. 先看端口有没有人在听：@@netstat -ano | findstr :8788@@；没有输出说明服务没起来
-2. 手动触发一次计划任务：@@schtasks /Run /TN CanvasHub-Web@@，然后等 3 秒刷新页面
-3. 还不行就在程序目录里前台启动看报错：@@node server.mjs@@（日志也会写到 @@logs/launchd-web.log@@）
-4. 端口被占用就改 @@config.json@@ 里的 @@web.port@@，然后重新运行 @@install.ps1@@
+1. 先看端口有没有人在听：`netstat -ano | findstr :8788`；没有输出说明服务没起来
+2. 手动触发一次计划任务：`schtasks /Run /TN CanvasHub-Web`，然后等 3 秒刷新页面
+3. 还不行就在程序目录里前台启动看报错：`node server.mjs`（日志也会写到 `logs/launchd-web.log`）
+4. 端口被占用就改 `config.json` 里的 `web.port`，然后重新运行 `install.ps1`
 
 **Q：定时任务没跑？**
 运行 `node cli.mjs doctor` 看提示；日志在 `logs/` 目录。Windows 可在「任务计划程序」里右键任务手动运行一次。

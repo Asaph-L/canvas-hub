@@ -119,6 +119,13 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
 
 **Token invalid (HTTP 401)?** Regenerate it in Canvas → Account → Settings → Approved Integrations, then paste it in the dashboard Settings page (or edit `secrets.json`).
 
+**Windows: `git clone` fails with "Connection was reset"?** If your machine reaches GitHub through a system proxy (Clash / V2Ray on `127.0.0.1:2080` etc.), git does **not** read the Windows system/IE proxy — configure it explicitly:
+
+    git config --global http.proxy  http://127.0.0.1:2080
+    git config --global https.proxy http://127.0.0.1:2080
+
+**Windows: `curl` or `Invoke-WebRequest` fails with a schannel credential error?** That is a broken system TLS stack, unrelated to this project: **all network I/O here goes through Node's built-in fetch (bundled OpenSSL + CA store)**, including the installer's Canvas check and dashboard probe, so everything still works.
+
 **Dashboard will not open?** Check the port (`lsof -nP -i :8788` on macOS/Linux, `netstat -ano | findstr 8788` on Windows). If taken, change `web.port` in `config.json` and restart the service.
 
 **Scheduled job did not run?** Run `node cli.mjs doctor` and check `logs/`. On Windows, open Task Scheduler and run the CanvasHub-* task manually.

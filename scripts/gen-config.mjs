@@ -6,13 +6,19 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const e = process.env;
 
 const larkOn = e.LARK === '1';
+// 桌面通知开关：新变量 ENABLE_DESKTOP，兼容旧的 ENABLE_MACOS / MACOS；
+// 三者都没有时默认开启（安装向导总会显式传值）
+const desktopRaw = e.ENABLE_DESKTOP != null && e.ENABLE_DESKTOP !== ''
+  ? e.ENABLE_DESKTOP
+  : (e.ENABLE_MACOS != null && e.ENABLE_MACOS !== '' ? e.ENABLE_MACOS : e.MACOS);
+const desktopOn = desktopRaw !== '0';
 const cfgPath = path.join(ROOT, 'config.json');
 let prev = {};
 try { prev = JSON.parse(fs.readFileSync(cfgPath, 'utf8')) || {}; } catch {}
 const cfg = {
   canvas: { baseUrl: e.CANVAS_URL || 'https://canvas.cityu.edu.hk', tokenFile: 'secrets.json', timeoutMs: 30000 },
   lark: {},
-  channels: { desktop: e.MACOS === '1', macos: e.MACOS === '1', larkIM: larkOn, larkBase: larkOn, larkCalendar: larkOn, dashboard: true },
+  channels: { desktop: desktopOn, macos: desktopOn, larkIM: larkOn, larkBase: larkOn, larkCalendar: larkOn, dashboard: true },
   web: { port: Number(e.PORT || 8788), lang: e.WEB_LANG === 'en' ? 'en' : 'zh' },
   download: { root: e.FILES_DIR || path.join(process.env.HOME || '', 'Desktop', 'CityU 课程'), maxFileSizeMB: 300, addWeekPrefix: false },
   courses: { include: [], exclude: e.CANVAS_EXCLUDE ? e.CANVAS_EXCLUDE.split(',') : [], names: {} },

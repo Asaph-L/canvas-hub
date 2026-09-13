@@ -176,15 +176,17 @@ function winCreate(name, tr, schedule) {
   else args.push('/SC', 'DAILY', '/ST', schedule.time);
   if (FAKE_WIN) { log('[模拟] schtasks ' + args.join(' ')); return; }
   const r = spawnSync('schtasks', args, { encoding: 'utf8' });
-  if (r.status === 0) log('✅ 已创建计划任务：' + name);
-  else log('⚠️ 创建失败：' + name + ' ' + ((r.stderr || r.stdout || '').trim().slice(0, 200)));
+  if (r.status === 0) { log('✅ 已创建计划任务：' + name); return; }
+  const detail = ((r.stderr || '') + (r.stdout || '')).trim();
+  log('⚠️ 创建失败：' + name + '（exit ' + r.status + '）' + (detail ? ' ' + detail.slice(0, 200) : ' 无输出 —— 常见原因：权限/沙箱限制，请用管理员 PowerShell 重试'));
 }
 
 function winRunNow(name) {
   if (FAKE_WIN) { log('[模拟] schtasks /Run /TN ' + name); return; }
   const r = spawnSync('schtasks', ['/Run', '/TN', name], { encoding: 'utf8' });
-  if (r.status === 0) log('▶️  已立即启动：' + name);
-  else log('⚠️ 立即启动失败：' + name + ' ' + ((r.stderr || r.stdout || '').trim().slice(0, 160)));
+  if (r.status === 0) { log('▶️  已立即启动：' + name); return; }
+  const detail = ((r.stderr || '') + (r.stdout || '')).trim();
+  log('⚠️ 立即启动失败：' + name + '（exit ' + r.status + '）' + (detail ? ' ' + detail.slice(0, 160) : ' 无输出 —— 可能是权限限制'));
 }
 
 function winInstall() {
@@ -210,7 +212,8 @@ function winInstall() {
 function winRemove() {
   for (const name of Object.values(WIN_TASKS)) {
     const r = spawnSync('schtasks', ['/Delete', '/F', '/TN', name], { encoding: 'utf8' });
-    log((r.status === 0 ? '已移除：' : '（未找到）') + name);
+    const detail = ((r.stderr || '') + (r.stdout || '')).trim();
+    log((r.status === 0 ? '已移除：' : '（未能移除，exit ' + r.status + '）') + name + (r.status === 0 || !detail ? '' : ' ' + detail.slice(0, 160)));
   }
 }
 

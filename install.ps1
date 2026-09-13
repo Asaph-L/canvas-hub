@@ -106,12 +106,15 @@ while ([string]::IsNullOrWhiteSpace($CanvasToken) -and $attempt -lt 3) {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($CanvasToken)) {
-  try {
-    $resp = Invoke-RestMethod -Uri "$CanvasUrl/api/v1/users/self" -Headers @{ Authorization = "Bearer $CanvasToken" } -TimeoutSec 25
-    Ok "Canvas 连接成功，账号：$($resp.name)"
-  } catch {
-    Warn2 "Canvas 校验失败（$($_.Exception.Message)），之后可用 node cli.mjs doctor 复查"
-  }
+  # 用 Node 的 fetch 校验：不依赖 Windows schannel / curl（部分机器系统 TLS 栈不可用会导致误报）
+  $env:CV_URL = $CanvasUrl
+  $env:CV_TOKEN = $CanvasToken
+  $verifyJs = 'fetch(process.env.CV_URL + "/api/v1/users/self", { headers: { Authorization: "Bearer " + process.env.CV_TOKEN } }).then(async function (r) { if (!r.ok) { process.exit(1); } var j = await r.json(); process.stdout.write(j.name || ""); }).catch(function () { process.exit(1); })'
+  $who = (& $Node -e $verifyJs 2>$null)
+  if ($LASTEXITCODE -eq 0) { Ok "Canvas 连接成功，账号：$who" }
+  else { Warn2 'Canvas 校验没通过（Token/地址可能有误，或本机网络受限）；同步时会再验证一次，也可用 node cli.mjs doctor 复查' }
+  Remove-Item Env:CV_URL -ErrorAction SilentlyContinue
+  Remove-Item Env:CV_TOKEN -ErrorAction SilentlyContinue
 } else {
   Warn2 '未填写 Canvas Token，同步功能不可用（可在 config.json / secrets.json 里补）'
 }
@@ -129,7 +132,7 @@ if ($DeepSeekKey) { Ok 'DeepSeek Key 已记录' } else { Warn2 '未填 DeepSeek 
 Write-Host ''
 
 # ---------- 5. 功能开关 ----------
-$EnableNotify = if ($env:ENABLE_MACOS) { $env:ENABLE_MACOS } else { if (AskYesNo '启用 Windows 系统通知（截止提醒与每日摘要，推荐）' 'Y') { '1' } else { '0' } }
+$EnableNotify = if ($env:ENABLE_DESKTOP) { $env:ENABLE_DESKTOP } elseif ($env:ENABLE_MACOS) { $env:ENABLE_MACOS } else { if (AskYesNo '启用 Windows 系统通知（截止提醒与每日摘要，推荐）' 'Y') { '1' } else { '0' } }
 $EnableWeb = if ($env:ENABLE_WEB) { $env:ENABLE_WEB } else { if (AskYesNo '启用 Web 看板（含日历、对话、设置，默认 8788 端口）' 'Y') { '1' } else { '0' } }
 $EnableSchedule = if ($env:ENABLE_SCHEDULE) { $env:ENABLE_SCHEDULE } else { if (AskYesNo '启用计划任务（每天自动同步 + 截止提醒）' 'Y') { '1' } else { '0' } }
 $Morning = if ($env:MORNING) { $env:MORNING } else { if ($EnableSchedule -eq '1') { Ask '每天几点同步' '08:00' } else { '08:00' } }
@@ -175,6 +178,7 @@ $env:DEEPSEEK_KEY = $DeepSeekKey
 $env:FILES_DIR = $FilesDir
 $env:PORT = $Port
 $env:MACOS = $MacFlag
+$env:ENABLE_DESKTOP = $MacFlag
 $env:LARK = $LarkFlag
 $env:LARK_CLI = $LarkCli
 $env:MORNING = $Morning
@@ -207,10 +211,9 @@ if ($EnableWeb -eq '1') {
   $ready = $false
   for ($i = 0; $i -lt 25; $i++) {
     Start-Sleep -Seconds 1
-    try {
-      $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/state" -TimeoutSec 3 -UseBasicParsing
-      if ($resp.StatusCode -eq 200) { $ready = $true; break }
-    } catch { }
+    $pingJs = 'fetch("http://127.0.0.1:' + $Port + '/api/state").then(function (r) { process.exit(r.ok ? 0 : 1); }).catch(function () { process.exit(1); })'
+    & $Node -e $pingJs 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
   }
   if ($ready) {
     Ok "看板已就绪：http://127.0.0.1:$Port"

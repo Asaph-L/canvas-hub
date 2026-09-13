@@ -137,12 +137,12 @@ while [ -z "$CANVAS_TOKEN" ] && [ "$attempt" -lt 3 ]; do
 done
 
 if [ -n "$CANVAS_TOKEN" ]; then
-  code="$(curl -s -o /tmp/canvashub_check.json -w '%{http_code}' -m 25 -H "Authorization: Bearer $CANVAS_TOKEN" "$CANVAS_URL/api/v1/users/self" || echo 000)"
-  if [ "$code" = "200" ]; then
-    who="$("$NODE_BIN" -e 'const fs=require("fs");try{process.stdout.write(String(JSON.parse(fs.readFileSync("/tmp/canvashub_check.json","utf8")).name||""))}catch(e){}' || true)"
+  # 用 Node 的 fetch 校验，不依赖 curl（部分系统 TLS 栈异常时 curl 会误报）
+  who="$(CANVAS_URL="$CANVAS_URL" CANVAS_TOKEN="$CANVAS_TOKEN" "$NODE_BIN" -e 'fetch(process.env.CANVAS_URL + "/api/v1/users/self", { headers: { Authorization: "Bearer " + process.env.CANVAS_TOKEN } }).then(async function (r) { if (!r.ok) { process.exit(1); } var j = await r.json(); process.stdout.write(j.name || ""); }).catch(function () { process.exit(1); })' 2>/dev/null || true)"
+  if [ -n "$who" ]; then
     ok "Canvas 连接成功，账号：$who"
   else
-    warn "Canvas 校验返回 HTTP ${code}（token 或地址可能有误，之后可用 node cli.mjs doctor 复查）"
+    warn "Canvas 校验没通过（Token/地址可能有误，或网络受限）；稍后可用 node cli.mjs doctor 复查"
   fi
 else
   warn "未填写 Canvas Token，同步功能不可用（可在 config.json / secrets.json 里补）"
@@ -228,7 +228,7 @@ case "$CANVAS_URL" in *cityu*) CANVAS_EXCLUDE="SD_ANTI_DECEPTION,SD_CASH";; esac
 echo ""
 ok "正在写入配置 …"
 CANVAS_URL="$CANVAS_URL" CANVAS_TOKEN="$CANVAS_TOKEN" DEEPSEEK_KEY="$DEEPSEEK_KEY" FILES_DIR="$FILES_DIR" \
-  PORT="$PORT_NUM" MACOS="$MACOS_FLAG" LARK="$LARK_FLAG" LARK_CLI="$LARK_CLI" \
+  PORT="$PORT_NUM" MACOS="$MACOS_FLAG" ENABLE_DESKTOP="$MACOS_FLAG" LARK="$LARK_FLAG" LARK_CLI="$LARK_CLI" \
   MORNING="${MORNING:-08:00}" EVENING="${EVENING:-20:00}" CANVAS_EXCLUDE="$CANVAS_EXCLUDE" \
   TARGET_PERCENT="${TARGET_PERCENT:-60}" \
   "$NODE_BIN" scripts/gen-config.mjs
