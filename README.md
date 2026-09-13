@@ -27,11 +27,11 @@
 
 ### 第 1 步：拿到程序
 
-把同学给你的 canvas-hub 文件夹解压到任意位置（例如桌面）。
+把 canvas-hub 文件夹解压到任意位置（例如桌面）。
 
 ### 第 2 步：准备 Canvas Token
 
-1. 浏览器打开 Canvas（如 https://canvas.cityu.edu.hk）并登录
+1. 浏览器打开 Canvas 并登录
 2. 右上角头像 → 账户 / Account → 设置 / Settings
 3. 找到 已批准集成 / Approved Integrations → 点 + New Access Token
 4. 用途随便填（如 canvas-hub），点生成，复制那串字符（形如 1839~xxxx）
