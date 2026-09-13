@@ -239,6 +239,7 @@ Ok '安装完成！'
 Write-Host "  程序目录：$targetFull"
 Write-Host "  资料目录：$FilesDir"
 Write-Host "  Web 看板：http://127.0.0.1:$Port"
+Write-Host '  手机看板：在网页「设置 → 手机配对」里扫码（手机与电脑同一 WiFi，首次按提示装一次证书）'
 Write-Host ''
 Write-Host '常用命令（在程序目录执行）：'
 Write-Host '  node cli.mjs doctor     # 体检，出问题先跑这个'

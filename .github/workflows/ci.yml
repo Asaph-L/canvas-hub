@@ -43,6 +43,11 @@ jobs:
         shell: bash
         run: for f in install.sh uninstall.sh package.sh; do bash -n "$f"; done
 
+      - name: install.ps1 must keep its UTF-8 BOM
+        shell: bash
+        run: |
+          node -e "const b=require('fs').readFileSync('install.ps1'); if(!(b[0]===0xEF&&b[1]===0xBB&&b[2]===0xBF)){console.error('install.ps1 丢失了 UTF-8 BOM：PowerShell 5.1 会把中文读成乱码');process.exit(1)} console.log('install.ps1 BOM OK')"
+
       - name: PDF extraction self-test (no Spotlight required)
         shell: bash
         run: node scripts/selftest-pdf.mjs
