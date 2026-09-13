@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke (${{ matrix.os }} / Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: '18'
+          - os: ubuntu-latest
+            node: '20'
+          - os: ubuntu-latest
+            node: '22'
+          - os: macos-latest
+            node: '20'
+          - os: windows-latest
+            node: '20'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Syntax check (all .mjs)
+        shell: bash
+        run: |
+          set -e
+          count=0
+          for f in $(git ls-files '*.mjs'); do node --check "$f"; count=$((count+1)); done
+          echo "checked $count files"
+
+      - name: Shell script syntax
+        if: runner.os != 'Windows'
+        shell: bash
+        run: for f in install.sh uninstall.sh package.sh; do bash -n "$f"; done
+
+      - name: PDF extraction self-test (no Spotlight required)
+        shell: bash
+        run: node scripts/selftest-pdf.mjs
+
+      - name: End-to-end smoke (demo data, report, dashboard)
+        shell: bash
+        run: |
+          set -e
+          mkdir -p "$RUNNER_TEMP/courses"
+          export FILES_DIR="$RUNNER_TEMP/courses"
+          export CANVAS_URL="https://canvas.example.edu"
+          export CANVAS_TOKEN="dummy-token"
+          export WEB_LANG=zh
+          node scripts/gen-config.mjs
+          node cli.mjs demo
+          node cli.mjs status
+          node cli.mjs dashboard
+          test -f out/dashboard/index.html
+          node cli.mjs demo --off
+          echo "smoke test passed"
+
+  powershell:
+    name: Windows scripts (PowerShell + Task Scheduler)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in @('install.ps1', 'uninstall.ps1')) {
+            $errors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f).Path, [ref]$null, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              Write-Host "FAIL: $f -> $($errors[0].Message)"
+              $failed = $true
+            } else {
+              Write-Host "OK: $f"
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Task Scheduler abstraction (create, status, remove)
+        shell: pwsh
+        run: |
+          $env:NODE_BIN = (Get-Command node).Source
+          $env:ENABLE_MORNING = '1'
+          $env:ENABLE_EVENING = '1'
+          $env:ENABLE_WEB = '1'
+          $env:MORNING = '08:00'
+          $env:EVENING = '20:00'
+          $env:PORT = '8788'
+          node scripts/schedule.mjs install
+          node scripts/schedule.mjs status
+          node scripts/schedule.mjs remove
+
+      - name: End-to-end smoke on Windows
+        shell: pwsh
+        run: |
+          $env:FILES_DIR = "$env:RUNNER_TEMP\courses"
+          $env:CANVAS_URL = 'https://canvas.example.edu'
+          $env:CANVAS_TOKEN = 'dummy-token'
+          node scripts/gen-config.mjs
+          node cli.mjs demo
+          node cli.mjs status
+          node cli.mjs dashboard
+          if (-not (Test-Path 'out/dashboard/index.html')) { throw 'dashboard not generated' }
+          node cli.mjs demo --off
+          Write-Host 'windows smoke test passed'
