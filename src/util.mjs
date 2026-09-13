@@ -1,6 +1,48 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+
+export const IS_MAC = process.platform === 'darwin';
+export const IS_WIN = process.platform === 'win32';
+
+// 跨平台打开文件 / 网址（macOS: open，Windows: start，Linux: xdg-open）
+export function openPath(target) {
+  try {
+    if (IS_WIN) spawnSync('cmd', ['/c', 'start', '', String(target)], { stdio: 'ignore', timeout: 15000 });
+    else if (IS_MAC) spawnSync('open', [String(target)], { stdio: 'ignore', timeout: 15000 });
+    else spawnSync('xdg-open', [String(target)], { stdio: 'ignore', timeout: 15000 });
+  } catch {}
+}
+
+// 跨平台桌面通知
+export function desktopNotify(title, body) {
+  const t = String(title || '').slice(0, 120);
+  const b = String(body || '').replace(/\n/g, ' ').slice(0, 180);
+  try {
+    if (IS_MAC) {
+      const esc = (s) => s.replace(/"/g, "'");
+      spawnSync('osascript', ['-e', 'display notification "' + esc(b) + '" with title "' + esc(t) + '"'], { timeout: 15000 });
+      return true;
+    }
+    if (IS_WIN) {
+      const esc = (s) => s.replace(/'/g, "''");
+      const ps = [
+        '[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;',
+        '$t = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);',
+        '$x = $t.GetElementsByTagName("text");',
+        "$x.Item(0).AppendChild($t.CreateTextNode('" + esc(t) + "')) > $null;",
+        "$x.Item(1).AppendChild($t.CreateTextNode('" + esc(b) + "')) > $null;",
+        '$n = [Windows.UI.Notifications.ToastNotification]::new($t);',
+        '[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Canvas Course Hub").Show($n);',
+      ].join(' ');
+      spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 20000 });
+      return true;
+    }
+    spawnSync('notify-send', [t, b], { timeout: 10000 });
+    return true;
+  } catch { return false; }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..');

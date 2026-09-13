@@ -15,6 +15,7 @@ export async function doctor() {
   const warn = (m, fix) => rows.push(['⚠️', m + (fix ? '　→ ' + fix : '')]);
   const bad = (m, fix) => rows.push(['❌', m + (fix ? '　→ ' + fix : '')]);
 
+  ok('运行平台：' + process.platform + ' / Node ' + process.arch + '（' + os.release() + '）');
   const major = Number(String(process.versions.node).split('.')[0]);
   if (major >= 18) ok('Node ' + process.version + '（' + process.execPath + '）');
   else bad('Node 版本过低：' + process.version, 'brew install node');
@@ -63,30 +64,19 @@ export async function doctor() {
     warn('Web 看板未运行', 'launchctl kickstart -k gui/$(id -u)/com.canvashub.web 或 node server.mjs');
   }
 
-  const lc = spawnSync('launchctl', ['list'], { encoding: 'utf8' });
-  const list = (lc.stdout || '') + (lc.stderr || '');
-  function taskState(label) {
-    const short = label.split('.').pop();
-    let installed = false;
-    try { installed = fs.existsSync(path.join(os.homedir(), 'Library', 'LaunchAgents', label + '.plist')); } catch {}
-    let loaded = false;
-    try {
-      const one = spawnSync('launchctl', ['list', label], { encoding: 'utf8' });
-      loaded = one.status === 0 && ((one.stdout || '') + (one.stderr || '')).trim().length > 0;
-    } catch {}
-    let ranLog = false;
-    try { ranLog = fs.existsSync(path.join(ROOT, 'logs', 'launchd-' + short + '.log')); } catch {}
-    return { installed, loaded, listed: list.includes(label), ranLog };
-  }
-  const wanted = [];
-  if (ch.macos || ch.larkIM || ch.larkBase || ch.larkCalendar || ch.dashboard) wanted.push('com.canvashub.morning');
-  wanted.push('com.canvashub.evening');
-  wanted.push('com.canvashub.web');
-  for (const label of wanted) {
-    const st = taskState(label);
-    if (st.loaded || st.listed) ok('定时/常驻任务运行中：' + label);
-    else if (st.installed || st.ranLog) ok('任务已就绪：' + label + (st.ranLog ? '（有运行日志）' : '（plist 已安装）'));
-    else warn('未安装任务：' + label, 'bash install.sh 安装定时与常驻任务');
+  // 后台任务：交给跨平台调度层报告（macOS=launchd / Windows=计划任务 / Linux=crontab）
+  const sched = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'schedule.mjs'), 'status'], { encoding: 'utf8' });
+  const schedLines = ((sched.stdout || '') + (sched.stderr || '')).trim().split(/\r?\n/).filter(Boolean);
+  if (schedLines.length) {
+    for (const line of schedLines) {
+      const clean = line.replace(/^[✅⚠️❌\s]+/, '').trim();
+      if (line.includes('✅')) ok('后台任务：' + clean);
+      else if (line.includes('⚠️')) warn('后台任务待处理：' + clean, 'macOS 用 bash install.sh 重装；Windows 用 powershell -File install.ps1');
+      else if (line.includes('❌')) warn('后台任务未安装：' + clean, process.platform === 'win32' ? 'powershell -ExecutionPolicy Bypass -File install.ps1' : 'bash install.sh');
+      else ok(line);
+    }
+  } else {
+    warn('未能读取后台任务状态', '手动运行 node scripts/schedule.mjs status');
   }
 
   if (larkEnabled()) {

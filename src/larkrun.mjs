@@ -12,6 +12,12 @@ export function larkBin() {
   const c = cfg.lark && cfg.lark.cli ? String(cfg.lark.cli) : '';
   if (c && fs.existsSync(c)) return c;
   if (fs.existsSync('/opt/homebrew/bin/lark-cli')) return '/opt/homebrew/bin/lark-cli';
+  if (process.platform === 'win32') {
+    const w = spawnSync('where', ['lark-cli'], { encoding: 'utf8' });
+    const wp = (w.stdout || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0];
+    if (wp) return wp;
+    return 'lark-cli';
+  }
   const which = spawnSync('bash', ['-lc', 'command -v lark-cli'], { encoding: 'utf8' });
   const found = (which.stdout || '').trim();
   return found || 'lark-cli';

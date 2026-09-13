@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { ROOT, loadConfig, log, hkTime } from './util.mjs';
+import { ROOT, loadConfig, log, hkTime, desktopNotify } from './util.mjs';
 import { lark, larkUserOpenId } from './larkrun.mjs';
 
 function readState() {
@@ -10,11 +9,7 @@ function readState() {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 function macosNotify(title, body) {
-  try {
-    const t = String(title).replace(/"/g, "'");
-    const b = String(body).replace(/"/g, "'").replace(/\n/g, ' ').slice(0, 180);
-    spawnSync('osascript', ['-e', 'display notification "' + b + '" with title "' + t + '"'], { timeout: 15000 });
-  } catch {}
+  desktopNotify(title, body);
 }
 function hkDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date());

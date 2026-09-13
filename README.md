@@ -22,8 +22,8 @@
 
 ### 前置要求
 
-- macOS（Windows / Linux 上核心功能可用，但没有定时任务与系统通知）
-- Node.js 18 或更高：**没装也没关系**，安装向导会问你要不要用 Homebrew 自动装；没有 Homebrew 时会提示到 nodejs.org 下载 LTS 版
+- **macOS / Windows / Linux 都可以**（Windows 用计划任务、macOS 用 launchd 做定时；Linux 需手动配 crontab）
+- Node.js 18 或更高：**没装也没关系**，安装向导会问你要不要自动装（macOS 用 Homebrew，Windows 用 winget）；都没有时会提示到 nodejs.org 下载 LTS 版
 
 ### 第 1 步：拿到程序
 
@@ -39,8 +39,17 @@
 
 ### 第 3 步：一条命令安装
 
+macOS / Linux：
+
     cd 你解压出来的 canvas-hub 目录
     bash install.sh
+
+Windows（PowerShell）：
+
+    cd 你解压出来的 canvas-hub 目录
+    powershell -ExecutionPolicy Bypass -File install.ps1
+
+> Windows 用户也可以直接在解压出来的文件夹里右键 →「在终端中打开」，然后粘贴上面那条 PowerShell 命令。
 
 向导会依次问你：
 
@@ -132,7 +141,17 @@
     node cli.mjs dashboard           # 生成离线 HTML 看板
     node cli.mjs server              # 前台启动 Web 看板
 
+## Windows 说明
+
+- 定时任务用「任务计划程序」实现，会创建三个任务：**CanvasHub-Morning**（每天同步）、**CanvasHub-Evening**（截止检查）、**CanvasHub-Web**（每 5 分钟检查 Web 服务是否存活，等价于常驻）。可在开始菜单搜索「任务计划程序」查看。
+- 这些任务通过 VBS 包装以**隐藏窗口**方式运行，不会每 5 分钟弹一个黑框。
+- 系统通知使用 Windows 原生 Toast（无需安装任何模块）；如果没弹，检查「设置 → 系统 → 通知」里是否允许 PowerShell 通知。
+- 大纲 PDF 的文字提取是**纯 JS 实现**（不依赖 macOS Spotlight），Windows 上开箱可用；装了 DeepSeek Key 时解析质量更好。
+- 卸载：powershell -ExecutionPolicy Bypass -File uninstall.ps1
+
 ## 定时任务管理
+
+macOS：
 
     launchctl list | grep canvashub                                  # 查看任务
     launchctl kickstart -k gui/$(id -u)/com.canvashub.morning        # 立刻跑一次早间任务
@@ -205,7 +224,10 @@ launchctl kickstart -k gui/$(id -u)/com.canvashub.morning
 把 syllabus PDF 放到对应课程文件夹（文件名含 syllabus），然后 node cli.mjs analyze --force。也可以在网页对话里直接说「把 5002 的评分组成设为 作业 40%、期末 60%」。
 
 **Q：怎么完全卸载？**
-bash uninstall.sh 会移除定时任务与常驻服务（不会删你的课程资料）；然后删除程序目录即可。
+macOS：bash uninstall.sh；Windows：powershell -ExecutionPolicy Bypass -File uninstall.ps1。两者都只移除后台任务，不会删你的课程资料，然后删除程序目录即可。
+
+**Q（Windows）：计划任务在哪里看 / 怎么手动跑一次？**
+开始菜单搜「任务计划程序」→ 任务计划程序库 → 找到 CanvasHub-Morning / Evening / Web，右键「运行」即可立即执行。
 
 ## 🔒 隐私与安全
 

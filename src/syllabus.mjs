@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT, loadConfig, log } from './util.mjs';
+import { readPdf } from './pdftext.mjs';
 
 function readState() {
   const p = path.join(ROOT, 'data', 'state.json');
@@ -17,7 +18,15 @@ function decodeUni(s) {
   return String(s).replace(/\\U([0-9a-fA-F]{4})/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
 }
 
-function pdfText(file) {
+// 返回 { text, raw }：text 是去除字距噪声后的版本，raw 是原始抽取结果（启发式两种都试）
+function pdfTexts(file) {
+  let js = null;
+  try {
+    const r = readPdf(file);
+    if (r && r.text && r.text.length > 200) js = r;
+  } catch {}
+  // CANVAS_HUB_FORCE_JS_PDF=1 可强制走纯 JS 提取（用于在 macOS 上验证 Windows/Linux 路径）
+  if (process.platform !== 'darwin' || process.env.CANVAS_HUB_FORCE_JS_PDF === '1') return js;
   try {
     const r = spawnSync('mdimport', ['-t', '-d3', file], { encoding: 'utf8', timeout: 30000 });
     const out = r.stdout || '';
@@ -27,13 +36,13 @@ function pdfText(file) {
       const rest = out.slice(i + marker.length);
       const m = rest.search(/";\s*\n?\s*(kMDItem|\})/);
       const txt = decodeUni(m >= 0 ? rest.slice(0, m) : rest);
-      if (txt.trim().length > 100) return txt;
+      if (txt.trim().length > 100) return { text: txt, raw: (js && js.raw) || txt };
     }
     const r2 = spawnSync('mdls', ['-name', 'kMDItemTextContent', '-raw', file], { encoding: 'utf8', timeout: 15000 });
     const t2 = (r2.stdout || '').trim();
-    if (r2.status === 0 && t2 && t2 !== '(null)' && t2.length > 100) return t2;
+    if (r2.status === 0 && t2 && t2 !== '(null)' && t2.length > 100) return { text: t2, raw: (js && js.raw) || t2 };
   } catch {}
-  return null;
+  return js;
 }
 
 function htmlText(file) {
@@ -63,8 +72,13 @@ function findSyllabus(c) {
   const cands = entries.filter((e) => /syllabus/i.test(e) && /\.(pdf|html?)$/i.test(e));
   for (const e of cands) {
     const p = path.join(dir, e);
-    const text = /\.pdf$/i.test(e) ? pdfText(p) : htmlText(p);
-    if (text) return { text, source: e };
+    if (/\.pdf$/i.test(e)) {
+      const r = pdfTexts(p);
+      if (r && r.text) return { text: r.text, raw: r.raw || r.text, source: e };
+    } else {
+      const t = htmlText(p);
+      if (t) return { text: t, raw: t, source: e };
+    }
   }
   return null;
 }
@@ -81,23 +95,30 @@ const GROUPS = [
   [/exam|考试/i, '考试', 'exam'],
 ];
 
-function heuristicExtract(text) {
+// 不依赖换行：对每个百分比，向前找「最近的关键词」判断它属于哪个评分项。
+// 既能处理正常排版，也能处理 PDF 紧凑化后的一整行文本（Windows / 无 Spotlight 场景）。
+export function heuristicExtract(text) {
   const groups = new Map();
-  const lines = text.split(/\n+/);
-  for (const line of lines) {
-    if (line.length > 400) continue;
-    const pm = line.match(/(\d{1,3}(?:\.\d+)?)\s*%/);
-    if (!pm) continue;
-    const pct = parseFloat(pm[1]);
+  const flat = String(text).replace(/\s+/g, ' ');
+  const re = /(\d{1,3}(?:\.\d+)?)\s*%/g;
+  let m;
+  while ((m = re.exec(flat)) !== null) {
+    const pct = parseFloat(m[1]);
     if (!(pct > 0 && pct <= 100)) continue;
-    for (const [re, name, type] of GROUPS) {
-      if (re.test(line)) {
-        const g = groups.get(name) || { name, type, weight: 0 };
-        g.weight += pct;
-        groups.set(name, g);
-        break;
-      }
+    const before = flat.slice(Math.max(0, m.index - 90), m.index);
+    let best = null;
+    let bestPos = -1;
+    for (const [kwRe, name, type] of GROUPS) {
+      const g = new RegExp(kwRe.source, 'gi');
+      let hit = null;
+      let mm;
+      while ((mm = g.exec(before)) !== null) hit = mm.index;
+      if (hit != null && hit > bestPos) { bestPos = hit; best = { name, type }; }
     }
+    if (!best) continue;
+    const group = groups.get(best.name) || { name: best.name, type: best.type, weight: 0 };
+    group.weight += pct;
+    groups.set(best.name, group);
   }
   const comps = [...groups.values()].map((g) => ({ name: g.name, type: g.type, weight: Math.round(g.weight * 10) / 10 }));
   const total = comps.reduce((n, x) => n + x.weight, 0);
@@ -203,8 +224,17 @@ export async function analyzeSyllabi({ force = false } = {}) {
       if (result) log('   🤖 DeepSeek 解析成功');
     }
     if (!result || !result.components.length) {
-      result = { components: heuristicExtract(found.text), passThreshold: null, notes: '' };
-      if (result.components.length) log('   🔍 启发式解析成功');
+      const fromCompact = heuristicExtract(found.text);
+      const fromRaw = found.raw && found.raw !== found.text ? heuristicExtract(found.raw) : [];
+      const merged = new Map();
+      for (const c of [...fromCompact, ...fromRaw]) {
+        const prev = merged.get(c.name);
+        if (!prev) merged.set(c.name, { ...c });
+        else prev.weight = Math.max(prev.weight, c.weight);
+      }
+      const components = [...merged.values()];
+      result = { components, passThreshold: null, notes: '' };
+      if (components.length) log('   🔍 启发式解析成功（紧凑 ' + fromCompact.length + ' 项 / 原文 ' + fromRaw.length + ' 项）');
     }
     if (!result.components.length) {
       log('   ⚠️ 未识别出评分组成（可在网页设置里填 DeepSeek Key 后用 node cli.mjs analyze --force 重试）');

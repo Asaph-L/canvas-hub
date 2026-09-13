@@ -399,6 +399,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// 端口已被占用时优雅退出（Windows 计划任务每 5 分钟拉起一次，靠这个实现"常驻"）
+server.on('error', (e) => {
+  if (e && e.code === 'EADDRINUSE') {
+    console.log('端口 ' + PORT + ' 已被占用：服务应已在运行，本次退出。');
+    process.exit(0);
+  }
+  console.error('Web 服务错误：' + (e && e.message));
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, () => {
   console.log('Canvas 课程管家 Web 已启动：http://' + HOST + ':' + PORT);
 });

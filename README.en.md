@@ -18,7 +18,7 @@ Automatically pull your Canvas course materials, assignments, grades and announc
 
 ## Quick start (5 minutes)
 
-Requirements: macOS (core features work on Linux/Windows but without scheduled jobs and system notifications) and Node.js 18+. If Node is missing, the installer offers to run brew install node for you.
+Requirements: **macOS, Windows or Linux** (macOS uses launchd for scheduling, Windows uses Task Scheduler, Linux needs a manual crontab entry) and Node.js 18+. If Node is missing, the installer offers to install it for you (Homebrew on macOS, winget on Windows).
 
 ### 1. Get the project
 
@@ -35,8 +35,15 @@ The token is stored only in your local secrets.json (mode 600).
 
 ### 3. Run the installer
 
+macOS / Linux:
+
     cd path/to/canvas-hub
     bash install.sh
+
+Windows (PowerShell):
+
+    cd path\to\canvas-hub
+    powershell -ExecutionPolicy Bypass -File install.ps1
 
 The wizard asks for: install directory (default ~/Desktop/canvas-hub), course files directory (default ~/Desktop/CityU-Courses), Canvas URL, Canvas token, optional DeepSeek API key, feature toggles (macOS notifications / web dashboard / scheduled jobs / Feishu), interface language (Chinese or English) and whether to generate demo data.
 
@@ -76,6 +83,14 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
     npx @larksuite/cli@latest install     # install lark-cli
     node cli.mjs lark-setup               # authorise with your own Feishu account
     node cli.mjs lark-init                # create the "Canvas 课程中心" Bitable and bind it
+
+## Windows notes
+
+- Scheduling uses Task Scheduler, creating three tasks: **CanvasHub-Morning** (daily sync), **CanvasHub-Evening** (deadline check) and **CanvasHub-Web** (checks every 5 minutes whether the web dashboard is alive; if it is, the new instance exits immediately, which makes it effectively a always-on service).
+- Tasks run through a VBS wrapper with a **hidden window**, so no console flashes every 5 minutes.
+- Notifications use native Windows toasts (no extra modules). If nothing pops up, allow PowerShell notifications in Settings -> System -> Notifications.
+- PDF text extraction is **pure JavaScript** (no macOS Spotlight dependency), so syllabus parsing works out of the box on Windows; adding a DeepSeek key improves accuracy.
+- Uninstall: powershell -ExecutionPolicy Bypass -File uninstall.ps1
 
 ## Commands
 

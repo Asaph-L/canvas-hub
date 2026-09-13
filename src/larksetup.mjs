@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { ROOT, log } from './util.mjs';
+import { ROOT, log, openPath } from './util.mjs';
 import { lark, larkBin, larkStatus } from './larkrun.mjs';
 
 function saveIdentity() {
@@ -47,7 +46,7 @@ export async function larkSetup({ noWait = false, finishCode = '' } = {}) {
   try {
     fs.mkdirSync(path.dirname(qrPath), { recursive: true });
     const qr = lark(['auth', 'qrcode', url, '--output', 'out/lark-qr.png'], { timeout: 60000 });
-    if (qr.ok) { log('二维码已保存并尝试打开：out/lark-qr.png'); spawnSync('open', [qrPath]); }
+    if (qr.ok) { log('二维码已保存并尝试打开：out/lark-qr.png'); openPath(qrPath); }
   } catch {}
   if (noWait) {
     log('授权完成后运行：node cli.mjs lark-setup --finish ' + code);

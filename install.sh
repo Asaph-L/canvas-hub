@@ -251,26 +251,8 @@ if [ "$OS" = "Darwin" ] && { [ "$ENABLE_SCHEDULE" = "1" ] || [ "$ENABLE_WEB" = "
   [ "$ENABLE_WEB" = "1" ] && WEB_FLAG=1
   echo ""
   ok "正在安装后台任务 …"
-  UID_NUM="$(id -u)"
-  for legacy in com.cityu.canvashub.morning com.cityu.canvashub.evening com.cityu.canvashub.web; do
-    launchctl bootout "gui/$UID_NUM/$legacy" >/dev/null 2>&1 || true
-    rm -f "$HOME/Library/LaunchAgents/$legacy.plist"
-  done
   NODE_BIN="$NODE_BIN" PORT="$PORT_NUM" ENABLE_MORNING="$MORNING_FLAG" ENABLE_EVENING="$EVENING_FLAG" ENABLE_WEB="$WEB_FLAG" \
-    MORNING="${MORNING:-08:00}" EVENING="${EVENING:-20:00}" "$NODE_BIN" scripts/gen-plists.mjs
-  for label in com.canvashub.morning com.canvashub.evening com.canvashub.web; do
-    case "$label" in
-      *morning) [ "$MORNING_FLAG" = "1" ] || continue;;
-      *evening) [ "$EVENING_FLAG" = "1" ] || continue;;
-      *web) [ "$WEB_FLAG" = "1" ] || continue;;
-    esac
-    launchctl bootout "gui/$UID_NUM/$label" >/dev/null 2>&1 || true
-    if launchctl bootstrap "gui/$UID_NUM" "$HOME/Library/LaunchAgents/$label.plist" >/dev/null 2>&1; then
-      ok "已加载：$label"
-    else
-      warn "加载失败：${label}（稍后可手动执行 launchctl bootstrap gui/$UID_NUM ~/Library/LaunchAgents/$label.plist）"
-    fi
-  done
+    MORNING="${MORNING:-08:00}" EVENING="${EVENING:-20:00}" "$NODE_BIN" scripts/schedule.mjs install
 fi
 
 if [ "$ENABLE_WEB" = "1" ]; then
