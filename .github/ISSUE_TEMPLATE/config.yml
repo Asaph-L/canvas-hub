@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 先看 README 的常见问题
+    url: https://github.com/Asaph-L/canvas-hub#-常见问题
+    about: Token 失效、看板打不开、定时任务没跑等问题在 FAQ 里基本都有答案

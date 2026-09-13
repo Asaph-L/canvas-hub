@@ -1,0 +1,33 @@
+name: ✨ 功能建议
+description: 提出一个新功能或改进想法
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题？
+      description: 描述痛点，而不是直接给方案，这样更容易讨论出好设计
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你的想法
+      description: 如果已经有具体方案，写在这里
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 这个功能更偏向
+      options:
+        - 抓取与归档（Canvas 数据）
+        - 可视化与看板
+        - 提醒与日历
+        - 成绩与学业分析
+        - AI 助手
+        - 部署与跨平台
+        - 其它
+    validations:
+      required: true

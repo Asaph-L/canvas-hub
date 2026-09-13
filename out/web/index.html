@@ -820,10 +820,15 @@ function doRun(cmd) {
     })
     .catch(function (e) { st.textContent = t('reqFailed') + e; });
 }
-applyTheme(localStorage.getItem('ch-theme') || '');
-applyLang(LANG);
+// 支持深链：?tab=dash|cal|chat|set、?theme=light|dark（也方便截图）
+var URL_PARAMS = new URLSearchParams(location.search);
+var BOOT_THEME = URL_PARAMS.get('theme');
+var BOOT_TAB = URL_PARAMS.get('tab');
+applyTheme(BOOT_THEME || localStorage.getItem('ch-theme') || '');
+applyLang(URL_PARAMS.get('lang') || LANG);
 loadState();
 loadSettings();
+if (BOOT_TAB) { setTimeout(function () { showTab(BOOT_TAB); }, 300); }
 </script>
 </body>
 </html>

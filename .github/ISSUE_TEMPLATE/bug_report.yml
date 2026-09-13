@@ -1,0 +1,50 @@
+name: 🐛 Bug 报告
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先运行 `node cli.mjs doctor`，它的输出往往能直接定位问题。
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 操作系统
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node 版本
+      description: 运行 `node -v` 的输出
+      placeholder: v20.11.0
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: doctor 输出
+      description: 运行 `node cli.mjs doctor` 并粘贴结果
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述与复现步骤
+      description: 你做了什么、期望什么、实际发生了什么
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 如 logs/ 下的日志片段（请先确认没有粘贴 Canvas Token 等敏感信息）
+      render: text
+    validations:
+      required: false

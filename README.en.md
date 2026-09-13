@@ -1,142 +1,136 @@
 # Canvas Course Hub
 
-Automatically pull your Canvas course materials, assignments, grades and announcements to your own computer, organise them into folders, and surface everything in a web dashboard plus Feishu / macOS reminders.
+[![CI](https://github.com/Asaph-L/canvas-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/Asaph-L/canvas-hub/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
+![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![Dependencies](https://img.shields.io/badge/dependencies-0-success)
+[![Stars](https://img.shields.io/github/stars/Asaph-L/canvas-hub?style=social)](https://github.com/Asaph-L/canvas-hub/stargazers)
 
-**Everyone runs their own copy**: you supply your own Canvas token, all data stays on your machine, nothing is uploaded to a third-party server.
+> Pulls your Canvas course materials, assignments, grades and announcements onto your own machine, organises them into folders, and surfaces everything in a **web dashboard / Feishu / native notifications** — including syllabus weight parsing, so it can tell you *"what do I need on the final to stay safe?"*
 
-## Features
+**Everyone runs their own copy**: you supply your own Canvas token, all data stays on your machine, nothing is uploaded anywhere.
 
-- Dynamic course discovery: every sync reads your active courses from Canvas (nothing hard-coded); new courses automatically get a folder
-- Incremental downloads: keyed by file id + updated time; files you already have are never downloaded twice
-- Smart classification: keyword rules first, DeepSeek as fallback
-- Grade tracking: current scores from Canvas + assessment weights parsed from your syllabus PDF, with a "what do I need on the final to stay safe" calculation
-- Action list: pending assignments ranked by urgency x weight
-- Dashboard: week calendar, deadline heatmap, course cards, one-click open local files
-- Reminders: macOS notifications / Feishu messages / Feishu calendar events (1 day + 1 hour before)
-- Daily digest in Markdown, weekly rollup on Sundays
-- Scheduled jobs: sync at 08:00 and deadline check at 20:00 every day (missed runs catch up on wake)
+📖 [中文说明](README.md)
 
-## Quick start (5 minutes)
+---
 
-Requirements: **macOS, Windows or Linux** (macOS uses launchd for scheduling, Windows uses Task Scheduler, Linux needs a manual crontab entry) and Node.js 18+. If Node is missing, the installer offers to install it for you (Homebrew on macOS, winget on Windows).
+## 📸 Screenshots
 
-### 1. Get the project
+| Dashboard: what to do next, deadlines, courses | Calendar: week view + deadline heatmap |
+| --- | --- |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Calendar](docs/screenshots/calendar.png) |
 
-Unzip the canvas-hub folder anywhere (Desktop is fine), or clone this repository.
+| Settings: API keys, manual actions, Feishu | Mobile layout (dark mode included) |
+| --- | --- |
+| ![Settings](docs/screenshots/settings.png) | ![Mobile](docs/screenshots/mobile.png) |
+
+> Screenshots use built-in demo data — run `node cli.mjs demo` to see the same on your machine.
+
+## ✨ Features
+
+- **Sync & organise** — active courses discovered dynamically (new courses get a folder automatically), incremental downloads, classification into `讲义 / 作业 / 阅读 / 其他` (Lecture / Assignment / Reading / Other) with an LLM fallback
+- **Dashboard** — course cards, 10-day deadline countdown, new-file feed, click a file name to open it locally; week calendar and a GitHub-style deadline heatmap
+- **Grades & planning** — current Canvas scores, assessment weights parsed from your syllabus PDF, "what you need on the final" calculation with two scenarios, and a to-do list ranked by urgency × weight
+- **Reminders** — daily sync at 08:00 and deadline check at 20:00 (missed runs catch up on wake), daily digest plus a Sunday weekly report, delivered through native notifications, Feishu messages and Feishu calendar events
+- **AI assistant** — ask "which course is most at risk?", "update my data", or "set the final exam weight to 55%"; it calls tools and streams the answer
+- **Bilingual UI** (Chinese / English), dark mode, mobile-friendly
+- **Zero dependencies** — plain Node.js built-ins, no `npm install`
+
+## 🚀 Quick start
+
+Requirements: **macOS, Windows or Linux** and Node.js 18+. If Node is missing, the installer offers to install it for you (Homebrew on macOS, winget on Windows).
+
+### 1. Get the code
+
+    git clone https://github.com/Asaph-L/canvas-hub.git
+    cd canvas-hub
 
 ### 2. Create a Canvas token
 
-1. Open Canvas (e.g. https://canvas.cityu.edu.hk) and sign in
-2. Avatar (top right) -> Account -> Settings
-3. Find Approved Integrations -> + New Access Token
-4. Give it any purpose, click generate, copy the string (looks like 1839~xxxx)
+Avatar (top right) → Account → Settings → Approved Integrations → `+ New Access Token` → copy the string.
 
-The token is stored only in your local secrets.json (mode 600).
+It is stored only in your local `secrets.json` (mode 600).
 
-### 3. Run the installer
+### 3. Install
 
 macOS / Linux:
 
-    cd path/to/canvas-hub
     bash install.sh
 
 Windows (PowerShell):
 
-    cd path\to\canvas-hub
     powershell -ExecutionPolicy Bypass -File install.ps1
 
-The wizard asks for: install directory (default ~/Desktop/canvas-hub), course files directory (default ~/Desktop/CityU-Courses), Canvas URL, Canvas token, optional DeepSeek API key, feature toggles (macOS notifications / web dashboard / scheduled jobs / Feishu), interface language (Chinese or English) and whether to generate demo data.
-
-It then runs a first sync, installs background jobs, opens the dashboard at http://127.0.0.1:8788 and finishes with a health check.
+The wizard asks for install directory, course-file directory, Canvas URL/token, an optional DeepSeek key, which features to enable, UI language, and whether to generate demo data. It then runs a first sync, installs scheduled jobs, opens the dashboard at http://127.0.0.1:8788 and finishes with a health check.
 
 ### 4. Use it
 
-- Dashboard: course cards, "what to do next", 10-day deadlines, recent files (click a file name to open it locally)
-- Calendar: week view + deadline heatmap + next 30 days
-- Chat: ask "which course is most at risk" or "update my data" (it will actually run a sync)
-- Settings: DeepSeek key, Canvas token, manual sync, language and theme toggles
+    node cli.mjs doctor      # health check (run this first when something is off)
+    node cli.mjs sync        # sync once
+    node cli.mjs demo        # no token yet? generate demo data (demo --off to exit)
 
-### Unattended install
+## 🖥 Platform support
 
-    NONINTERACTIVE=1 \
-      CANVAS_TOKEN=your_token \
-      FILES_DIR="$HOME/Desktop/CityU-Courses" \
-      DEEPSEEK_KEY=sk-xxx \
-      ENABLE_MACOS=1 ENABLE_WEB=1 ENABLE_SCHEDULE=1 ENABLE_LARK=0 \
-      bash install.sh
+| Feature | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Sync / archive / dashboard / digest | ✅ | ✅ | ✅ |
+| Notifications | ✅ Notification Center | ✅ native toast | ✅ notify-send |
+| Scheduling | ✅ launchd | ✅ Task Scheduler | ⚠️ manual crontab |
+| Syllabus PDF parsing | ✅ Spotlight + pure JS | ✅ pure JS | ✅ pure JS |
+| Feishu integration | ✅ | ✅ | ✅ |
 
-## Optional features
+Windows notes: three tasks are created (`CanvasHub-Morning / Evening / Web`). The web task checks every 5 minutes whether the dashboard is alive (a second instance exits immediately when the port is taken), and runs through a VBS wrapper with a hidden window so no console flashes.
 
-### Demo data (no Canvas token needed)
+## ⚙️ Optional
 
-    node cli.mjs demo          # 3 fake courses with grades and safety lines
+### Demo mode (no Canvas token needed)
+
+    node cli.mjs demo          # three fake courses with grades and safety lines
     node cli.mjs demo --off    # restore your real data
 
 ### DeepSeek (chat assistant, syllabus parsing, smart classification)
 
-Add your API key under Settings in the web dashboard (create one at platform.deepseek.com). Everything else works without it. Cost is usage-based: typically a few cents to a couple of dollars per month; parsing syllabi the first time costs a bit more.
+Add your API key under Settings in the dashboard (create one at platform.deepseek.com). Everything else works without it; syllabus parsing degrades to keyword rules. Cost is usage-based — typically a few cents to a couple of dollars per month.
 
 ### Feishu (calendar + Bitable + message push)
 
-Why bother: deadlines become Feishu calendar events with reminders, all course data lands in a Bitable you can filter, and the daily digest is pushed to a Feishu bot chat. It is entirely optional.
+Why bother: deadlines become Feishu calendar events with reminders, all course data lands in a Bitable, and the daily digest is pushed to a Feishu chat. Entirely optional.
 
     npx @larksuite/cli@latest install     # install lark-cli
     node cli.mjs lark-setup               # authorise with your own Feishu account
-    node cli.mjs lark-init                # create the "Canvas 课程中心" Bitable and bind it
+    node cli.mjs lark-init                # create the Bitable and bind it
 
-## Windows notes
+## 🛠 Commands
 
-- Scheduling uses Task Scheduler, creating three tasks: **CanvasHub-Morning** (daily sync), **CanvasHub-Evening** (deadline check) and **CanvasHub-Web** (checks every 5 minutes whether the web dashboard is alive; if it is, the new instance exits immediately, which makes it effectively a always-on service).
-- Tasks run through a VBS wrapper with a **hidden window**, so no console flashes every 5 minutes.
-- Notifications use native Windows toasts (no extra modules). If nothing pops up, allow PowerShell notifications in Settings -> System -> Notifications.
-- PDF text extraction is **pure JavaScript** (no macOS Spotlight dependency), so syllabus parsing works out of the box on Windows; adding a DeepSeek key improves accuracy.
-- Uninstall: powershell -ExecutionPolicy Bypass -File uninstall.ps1
+| Command | What it does |
+| --- | --- |
+| `node cli.mjs doctor` | Health check with fix suggestions |
+| `node cli.mjs daily` | Full pipeline (same as the 08:00 job) |
+| `node cli.mjs evening` | Sync + next-day deadline reminder |
+| `node cli.mjs sync` | Sync and download only |
+| `node cli.mjs analyze [--force]` | Re-parse syllabus assessment weights |
+| `node cli.mjs classify [--all]` | Smart classification |
+| `node cli.mjs due 10` | Deadlines within 10 days |
+| `node cli.mjs demo [--off]` | Demo data on / off |
+| `node cli.mjs server` | Run the dashboard in the foreground |
 
-## Commands
+## ❓ FAQ
 
-    node cli.mjs doctor              # health check (run this first when something is off)
-    node cli.mjs daily               # full pipeline (same as the 08:00 job)
-    node cli.mjs evening             # sync + next-day deadline reminder
-    node cli.mjs sync                # sync and download only
-    node cli.mjs analyze [--force]   # re-parse syllabus assessment weights
-    node cli.mjs classify [--all]    # smart classification
-    node cli.mjs due 10              # deadlines within 10 days
-    node cli.mjs demo [--off]        # demo data on/off
-    node cli.mjs server              # run the web dashboard in the foreground
+**Token invalid (HTTP 401)?** Regenerate it in Canvas → Account → Settings → Approved Integrations, then paste it in the dashboard Settings page (or edit `secrets.json`).
 
-## Scheduled jobs (macOS)
+**Dashboard will not open?** Check the port (`lsof -nP -i :8788` on macOS/Linux, `netstat -ano | findstr 8788` on Windows). If taken, change `web.port` in `config.json` and restart the service.
 
-    launchctl list | grep canvashub                                # list jobs
-    launchctl kickstart -k gui/$(id -u)/com.canvashub.morning      # run the morning job now
-    launchctl bootout gui/$(id -u)/com.canvashub.morning           # stop it
-    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.canvashub.morning.plist   # re-enable
+**Scheduled job did not run?** Run `node cli.mjs doctor` and check `logs/`. On Windows, open Task Scheduler and run the CanvasHub-* task manually.
 
-Logs: logs/launchd-morning.log, logs/launchd-evening.log, logs/launchd-web.log
+**My materials live elsewhere.** Point `download.root` in `config.json` at your existing folder; identical files are detected and not re-downloaded.
 
-## Packaging for others
+**How do I uninstall?** `bash uninstall.sh` (macOS/Linux) or `powershell -ExecutionPolicy Bypass -File uninstall.ps1` (Windows) — background jobs are removed, your course files are untouched.
 
-    bash package.sh
+## 🤝 Contributing
 
-Produces dist/canvas-hub-<date>.zip with source, installer and docs, excluding your secrets.json, data/, logs/ and personal config.
+Issues and PRs are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) first. The core rules: keep it dependency-free, and optional features must degrade gracefully.
 
-## FAQ
+## 📄 License
 
-**Token invalid (HTTP 401)?** Regenerate it in Canvas -> Account -> Settings -> Approved Integrations, then paste the new one in the web Settings page (or edit secrets.json).
-
-**Dashboard will not open?** Check the port: lsof -nP -i :8788. If it is taken, change web.port in config.json and run launchctl kickstart -k gui/$(id -u)/com.canvashub.web.
-
-**Scheduled job did not run?** Run node cli.mjs doctor and read logs/launchd-morning.log.
-
-**My materials live elsewhere.** Point download.root in config.json at your existing folder; files with the same name are detected and not downloaded again.
-
-**How do I uninstall?** bash uninstall.sh removes the background jobs (your course files are untouched); then delete the program folder.
-
-## Privacy
-
-- Canvas token lives in secrets.json (600), DeepSeek key in data/settings.json (600)
-- No data leaves your machine; the web server binds to 127.0.0.1 only
-- Never commit or share secrets.json / data/ (already covered by .gitignore)
-
-## License
-
-MIT. See LICENSE.
+[MIT](LICENSE). If this project helps you, a ⭐ is the best thanks.

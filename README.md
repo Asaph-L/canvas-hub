@@ -1,259 +1,232 @@
-# Canvas 课程管家（canvas-hub）
+# Canvas 课程管家 (canvas-hub)
 
-把 Canvas 上的课程资料、作业、成绩、公告自动抓到本地，整理成文件夹，并在网页看板 + 飞书 + 系统通知里提醒你。
+[![CI](https://github.com/Asaph-L/canvas-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/Asaph-L/canvas-hub/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
+![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![Dependencies](https://img.shields.io/badge/dependencies-0-success)
+[![Stars](https://img.shields.io/github/stars/Asaph-L/canvas-hub?style=social)](https://github.com/Asaph-L/canvas-hub/stargazers)
+
+> 把 Canvas 上的课程资料、作业、成绩、公告自动抓到本地整理好，并在**网页看板 / 飞书 / 系统通知**里提醒你 —— 还能解析课程大纲的评分权重，告诉你「这门课的期末要考多少分才安全」。
 
 **每个人跑自己的一份**：你填自己的 Canvas Token，数据只存在你自己的电脑上，不经过任何第三方服务器。
 
-## 能力总览
-
-- 动态课程发现：每次同步从 Canvas 拉取在读课程（不写死），新课程出现自动建「课程号 课程名 / 讲义·作业·阅读·其他」文件夹
-- 增量下载：按文件 id + 更新时间增量，本地已有同名文件不重复下载
-- 智能分类：关键词规则 + DeepSeek 兜底（把拿不准的文件归类）
-- 成绩追踪：抓课程当前分数，解析课程大纲 PDF 里的评分权重，倒推「这场考试要考多少分才安全」
-- 行动清单：未完成作业按「紧急度 × 大纲权重」排序，告诉你先做什么
-- 可视化看板：Web 端（日历周视图、截止热力图、课程卡片、文件直达）+ 离线 HTML 仪表盘
-- 提醒：macOS 系统通知 / 飞书消息 / 飞书日历日程（提前 1 天 + 1 小时）
-- 每日摘要：Markdown 归档，周日追加周报
-- 定时任务：每天 08:00 同步、20:00 检查次日截止（错过的任务开机后补跑）
+📖 [English README](README.en.md)
 
 ---
 
-## 🚀 部署（5 分钟）
+## 📸 界面预览
+
+| 看板：下一步做什么 + 截止 + 课程卡片 | 日历：周视图 + 截止热力图 |
+| --- | --- |
+| ![看板](docs/screenshots/dashboard.png) | ![日历](docs/screenshots/calendar.png) |
+
+| 设置：API / 手动操作 / 飞书入口 | 移动端自适应（深色模式同款布局） |
+| --- | --- |
+| ![设置](docs/screenshots/settings.png) | ![移动端](docs/screenshots/mobile.png) |
+
+> 截图使用内置演示数据生成，执行 `node cli.mjs demo` 即可在你自己的电脑上看到同样的界面。
+
+## ✨ 核心能力
+
+**📥 抓取与归档**
+- 动态课程发现：每次同步从 Canvas 读取在读课程，**新课程出现自动建文件夹**，无需任何配置
+- 增量下载：按文件 ID + 更新时间判断，本地已有同名文件不会重复下载
+- 分类归档：关键词规则 + DeepSeek 智能兜底，自动分到 `讲义 / 作业 / 阅读 / 其他`
+
+**📊 可视化**
+- Web 看板：课程卡片、10 天截止倒计时、新文件流、点击文件名直接打开本地资料
+- 日历视图：周历 + GitHub 风格截止热力图（可切换「截止密度 / 文件更新」两种口径）
+- 中英双语、深色模式、移动端自适应
+
+**🎯 学业分析**
+- 成绩追踪：自动抓取 Canvas 当前分数
+- **大纲权重解析**：从 syllabus PDF 提取「作业 30% / 期中 25% / 期末 40%」这样的评分组成
+- **安全线倒推**：结合已得成绩，算出「期末考试需要考多少分才能保住总分」，并给出两种口径（其余项按当前水平 / 其余项全满分）
+- 行动清单：未完成作业按 **紧急度 × 权重** 排序，告诉你先做什么
+
+**🔔 提醒与自动化**
+- 每天 08:00 自动同步，20:00 检查次日截止（错过的任务开机后补跑）
+- 每日摘要 + 周日周报（Markdown 归档）
+- 三种提醒渠道可自由开关：系统通知（macOS / Windows 原生）、飞书消息、飞书日历日程
+
+**🤖 AI 助手**
+- 网页里直接问：「我哪门课最危险？」「期末要考多少分？」「帮我更新一下」
+- 支持工具调用：会话里说「更新」它会真的去跑同步并汇报结果
+- 也可以一句话改数据：「把 5003 的期末权重改成 55%」
+
+## 🚀 快速开始
 
 ### 前置要求
 
-- **macOS / Windows / Linux 都可以**（Windows 用计划任务、macOS 用 launchd 做定时；Linux 需手动配 crontab）
-- Node.js 18 或更高：**没装也没关系**，安装向导会问你要不要自动装（macOS 用 Homebrew，Windows 用 winget）；都没有时会提示到 nodejs.org 下载 LTS 版
+- **macOS / Windows / Linux** 都可以（定时任务：macOS 用 launchd、Windows 用任务计划程序、Linux 需手动配 crontab）
+- Node.js 18+：**没装也没关系**，安装向导会问你要不要自动装（macOS 用 Homebrew、Windows 用 winget）
 
 ### 第 1 步：拿到程序
 
-把 canvas-hub 文件夹解压到任意位置（例如桌面）。
+    git clone https://github.com/Asaph-L/canvas-hub.git
+    cd canvas-hub
 
-### 第 2 步：准备 Canvas Token
+### 第 2 步：生成 Canvas Token
 
-1. 浏览器打开 Canvas 并登录
-2. 右上角头像 → 账户 / Account → 设置 / Settings
-3. 找到 已批准集成 / Approved Integrations → 点 + New Access Token
-4. 用途随便填（如 canvas-hub），点生成，复制那串字符（形如 1839~xxxx）
-   - 这串字符只保存在你电脑的 secrets.json 里，权限 600，不会外传
+1. 打开 Canvas 并登录
+2. 右上角头像 → 账号 / Account → 设置 / Settings
+3. 找到 已批准集成 / Approved Integrations → `+ New Access Token`
+4. 用途随便填，生成后复制那串字符（形如 `1839~xxxx`）
+
+> 它只保存在你电脑的 `secrets.json` 里（权限 600），不会外传。
 
 ### 第 3 步：一条命令安装
 
 macOS / Linux：
 
-    cd 你解压出来的 canvas-hub 目录
     bash install.sh
 
 Windows（PowerShell）：
 
-    cd 你解压出来的 canvas-hub 目录
     powershell -ExecutionPolicy Bypass -File install.ps1
 
-> Windows 用户也可以直接在解压出来的文件夹里右键 →「在终端中打开」，然后粘贴上面那条 PowerShell 命令。
-
-向导会依次问你：
-
-| 问题 | 说明 |
-| --- | --- |
-| 程序安装到哪个目录 | 默认 ~/Desktop/canvas-hub；直接回车即可 |
-| 课程文件保存到哪个目录 | 默认 ~/Desktop/CityU-Courses（会自动创建）；也可以指向你现有的课程文件夹 |
-| Canvas 地址 | 港城大同学直接回车（canvas.cityu.edu.hk）；其他学校填自己的 |
-| Canvas Token | 粘贴第 2 步复制的字符串（输入时不显示） |
-| DeepSeek API Key | 可选，直接回车跳过；填了才能用对话助手和大纲解析（按量计费，日常大概每月几毛到几块钱） |
-| 启用 macOS 系统通知 | 推荐 y |
-| 启用 Web 看板 | 推荐 y |
-| 启用定时任务 | 推荐 y（可自定义每天几点同步 / 几点提醒） |
-| 界面语言 | 1) 中文（默认） 2) English，之后随时可切换 |
-| 生成演示数据 | 没填 Canvas Token 时询问，可先看界面效果 |
-| 启用飞书集成 | 默认 n（见下方「可选功能 · 飞书」） |
-
-安装完成后会自动：执行首次同步 → 安装后台任务 → 打开网页看板 http://127.0.0.1:8788 → 跑一次体检。
+向导会依次问你：安装目录、课程资料目录、Canvas 地址与 Token、可选的 DeepSeek Key、要开启哪些功能、界面语言、是否生成演示数据。装完会自动同步一次、创建定时任务、打开看板并跑一遍体检。
 
 ### 第 4 步：用起来
 
-- 📊 看板：课程卡片、下一步做什么、10 天截止、最近新文件（点文件名直接打开本地文件）
-- 📅 日历：周历 + 截止热力图 + 未来 30 天清单
-- 💬 对话：问「我哪门课最危险」「帮我更新一下」，它会真的去同步并汇报
-- ⚙️ 设置：填 DeepSeek Key / 换 Canvas Token / 手动触发同步
+    node cli.mjs doctor      # 体检，出问题先跑这个
+    node cli.mjs sync        # 手动同步一次
+    node cli.mjs demo        # 没有 Token？先看演示数据（demo --off 退出）
 
-### 无人值守安装（可选）
+打开 http://127.0.0.1:8788 即可使用看板 / 日历 / 对话 / 设置。
 
-供批量部署或脚本化使用：
+<details>
+<summary>无人值守安装（批量部署 / 脚本化）</summary>
+
+macOS / Linux：
 
     NONINTERACTIVE=1 \
       CANVAS_TOKEN=你的token \
-      FILES_DIR="$HOME/Desktop/CityU 课程" \
+      FILES_DIR="$HOME/Desktop/CityU-Courses" \
       DEEPSEEK_KEY=sk-xxx \
       ENABLE_MACOS=1 ENABLE_WEB=1 ENABLE_SCHEDULE=1 ENABLE_LARK=0 \
       bash install.sh
 
----
+Windows：
 
-## 🧩 可选功能
+    $env:NONINTERACTIVE='1'; $env:CANVAS_TOKEN='你的token'
+    powershell -ExecutionPolicy Bypass -File install.ps1
+
+</details>
+
+## 🖥 平台支持
+
+| 功能 | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| 抓取 / 归档 / 看板 / 摘要 | ✅ | ✅ | ✅ |
+| 系统通知 | ✅ 通知中心 | ✅ 原生 Toast | ✅ notify-send |
+| 定时任务 | ✅ launchd | ✅ 任务计划程序 | ⚠️ 需手动配 crontab |
+| 大纲 PDF 解析 | ✅ Spotlight + 纯 JS | ✅ 纯 JS | ✅ 纯 JS |
+| 飞书集成 | ✅ | ✅ | ✅ |
+
+> Windows 说明：计划任务会创建 `CanvasHub-Morning / Evening / Web` 三个任务；Web 任务每 5 分钟检查一次服务是否存活（已在运行则新实例立即退出），并通过 VBS 包装成隐藏窗口运行，不会弹黑框。
+
+## ⚙️ 可选功能
 
 ### 先看演示数据（不需要 Canvas Token）
 
     node cli.mjs demo          # 生成 3 门假课程 + 成绩与安全线示例
     node cli.mjs demo --off    # 退出演示，恢复真实数据
 
-安装时如果没填 Canvas Token，向导也会问你要不要生成演示数据，方便先看界面再决定是否接入。
-
 ### DeepSeek（对话助手 / 大纲解析 / 智能分类）
 
-在网页「设置」里填入 API Key 即可（在 platform.deepseek.com 创建）。不填也能正常同步、归档、提醒，只是没有对话和大纲解析。
+在网页「设置」里填入 API Key 即可（到 platform.deepseek.com 创建）。不填也能正常同步、归档、提醒，大纲解析会退化为关键词规则。
 
-> 费用：按量计费，日常使用大概每月几毛到几块钱；首次解析课程大纲时会一次性消耗稍多。感觉贵可以只用关键词规则，不影响其它功能。
-
-### 界面语言
-
-网页看板右上角按钮可在中文 / English 之间切换（会记住选择）；安装时也可以直接选 English。默认语言写在 config.json 的 web.lang。
+> 费用：按量计费，日常大概每月几毛到几块钱；首次解析课程大纲时会一次性消耗稍多。
 
 ### 飞书（日历 + 多维表格 + 消息推送）
 
-**装上会更好用吗？** 会：截止日期会自动变成飞书日历日程（带提前 1 天 / 1 小时提醒），所有课程数据在飞书多维表格里可筛选可统计，每天摘要直接推到飞书消息。**不装也完全不影响**：macOS 系统通知 + 网页看板一样能用。
-
-需要先装官方的 lark-cli，并用自己的飞书账号授权一次：
+**装上会更好用吗？** 会：截止日期自动变成飞书日历日程（提前 1 天 / 1 小时提醒），课程数据同步进多维表格可筛选可统计，每日摘要直接推到飞书会话。**不装也完全不影响**其它功能。
 
     npx @larksuite/cli@latest install     # 安装 lark-cli
-    node cli.mjs lark-setup               # 按提示在浏览器/飞书里完成授权
-    node cli.mjs lark-init                # 创建「Canvas 课程中心」多维表格并绑定
-
-之后每天的摘要会发到飞书机器人会话，截止日期会自动建日历日程，数据同步进多维表格。
-
-> 注意：飞书的应用归属于你授权时使用的飞书组织（租户），个人账号无法授权其他组织的应用。
-
-### macOS 系统通知
-
-零配置，默认开启。没有飞书也能收到每日摘要与截止提醒。
-
----
+    node cli.mjs lark-setup               # 用自己的飞书账号授权（会打印链接与二维码）
+    node cli.mjs lark-init                # 创建多维表格并绑定
 
 ## 🛠 命令一览
 
-    node cli.mjs doctor              # 环境体检（出问题先跑这个）
-    node cli.mjs daily               # 完整流程（定时任务同款）
-    node cli.mjs evening             # 晚间同步 + 截止提醒
-    node cli.mjs sync                # 只同步下载
-    node cli.mjs analyze [--force]   # 重新解析大纲评分组成
-    node cli.mjs classify [--all]    # 智能分类（默认只处理「其他」）
-    node cli.mjs due 10              # 看 10 天内截止
-    node cli.mjs status              # 本地统计
-    node cli.mjs dashboard           # 生成离线 HTML 看板
-    node cli.mjs server              # 前台启动 Web 看板
-
-## Windows 说明
-
-> 说明：Windows 支持已完整实现（安装脚本、计划任务、Toast 通知、纯 JS 的 PDF 解析），但作者主要在 macOS 上开发，**脚本尚未在真机 Windows 上跑过**。如果你在 Windows 上遇到问题，欢迎提 Issue，我会跟着修。
-
-- 定时任务用「任务计划程序」实现，会创建三个任务：**CanvasHub-Morning**（每天同步）、**CanvasHub-Evening**（截止检查）、**CanvasHub-Web**（每 5 分钟检查 Web 服务是否存活，等价于常驻）。可在开始菜单搜索「任务计划程序」查看。
-- 这些任务通过 VBS 包装以**隐藏窗口**方式运行，不会每 5 分钟弹一个黑框。
-- 系统通知使用 Windows 原生 Toast（无需安装任何模块）；如果没弹，检查「设置 → 系统 → 通知」里是否允许 PowerShell 通知。
-- 大纲 PDF 的文字提取是**纯 JS 实现**（不依赖 macOS Spotlight），Windows 上开箱可用；装了 DeepSeek Key 时解析质量更好。
-- 卸载：powershell -ExecutionPolicy Bypass -File uninstall.ps1
-
-## 定时任务管理
-
-macOS：
-
-    launchctl list | grep canvashub                                  # 查看任务
-    launchctl kickstart -k gui/$(id -u)/com.canvashub.morning        # 立刻跑一次早间任务
-    launchctl bootout gui/$(id -u)/com.canvashub.morning             # 停用
-    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.canvashub.morning.plist   # 重新启用
-
-日志：logs/launchd-morning.log、logs/launchd-evening.log、logs/launchd-web.log
-
-## 📦 分发给其他人
-
-    bash package.sh
-
-会生成 dist/canvas-hub-日期.zip（源码 + 安装脚本 + 文档），**不含**你的 secrets.json、data/、logs/ 和个人配置。同学解压后跑 bash install.sh 即可。
-
----
-
-## 📁 目录结构
-
-    canvas-hub/
-    ├── install.sh / uninstall.sh / package.sh   # 安装 / 卸载 / 打包
-    ├── cli.mjs                 # 命令入口
-    ├── server.mjs              # Web 看板服务（含对话与流式接口）
-    ├── config.json             # 所有开关与规则（安装时生成）
-    ├── secrets.json            # Canvas Token（chmod 600，勿外传）
-    ├── src/                    # 核心模块
-    │   ├── sync.mjs canvas.mjs          # 抓取与增量下载
-    │   ├── classify.mjs smartclassify.mjs  # 分类
-    │   ├── syllabus.mjs                 # 大纲权重解析 + 安全线计算
-    │   ├── digest.mjs dashboard.mjs     # 摘要与离线看板
-    │   ├── notify.mjs                   # macOS / 飞书推送
-    │   ├── calendar.mjs base.mjs        # 飞书日历与多维表格
-    │   ├── larkrun.mjs larkinit.mjs larksetup.mjs  # 飞书工具
-    │   └── doctor.mjs                   # 环境体检
-    ├── out/web/                # Web 看板前端
-    ├── out/digest/ out/dashboard/       # 生成的摘要与离线看板
-    ├── data/                   # state.json（增量状态）、lark.json、settings.json
-    ├── logs/                   # 运行日志
-    └── scripts/                # 安装辅助脚本
-
-## ⚙️ 配置说明（config.json）
-
-- channels：macos / larkIM / larkBase / larkCalendar / dashboard 各渠道开关
-- web.port：Web 看板端口（默认 8788，被占用时改这里）
-- download.root：课程资料保存目录；download.maxFileSizeMB：超过则跳过（默认 300MB）
-- courses.include / exclude：按课程号或名称子串过滤；courses.names 可固定文件夹名
-- classify：关键词分类规则，可自行增删
-- grades.targetPercent：成绩安全线的目标分（默认 60）
-- schedule.morning / evening：定时时间
+| 命令 | 作用 |
+| --- | --- |
+| `node cli.mjs doctor` | 环境体检（12 项检查 + 修复建议） |
+| `node cli.mjs daily` | 完整流程：同步 → 大纲解析 → 智能分类 → 摘要 → 看板 → 日历 → Base → 推送 |
+| `node cli.mjs evening` | 晚间同步 + 次日截止提醒 |
+| `node cli.mjs sync` | 只同步下载 |
+| `node cli.mjs analyze [--force]` | 重新解析大纲评分组成 |
+| `node cli.mjs classify [--all]` | 智能分类 |
+| `node cli.mjs due 10` | 查看 10 天内截止 |
+| `node cli.mjs demo [--off]` | 演示数据开 / 关 |
+| `node cli.mjs server` | 前台启动 Web 看板 |
 
 ## ❓ 常见问题
 
 **Q：提示 Token 无效（HTTP 401）？**
-Canvas Token 过期或复制不全。Canvas → 账户 → 设置 → 已批准集成里重新生成，然后编辑 secrets.json 替换，或直接在网页「设置」页粘贴新的。
+Canvas Token 过期了。在 Canvas → 账号 → 设置 → 已批准集成重新生成，然后在网页「设置」页粘贴新的（或直接改 `secrets.json`）。
 
 **Q：Web 看板打不开？**
-先看端口是否被占用：lsof -nP -i :8788。被占用就改 config.json 的 web.port，然后重启服务：
-launchctl kickstart -k gui/$(id -u)/com.canvashub.web
+先看端口是否被占用：macOS / Linux 用 `lsof -nP -i :8788`，Windows 用 `netstat -ano | findstr 8788`。被占用就改 `config.json` 的 `web.port`，然后重启服务（macOS：`launchctl kickstart -k gui/$(id -u)/com.canvashub.web`；Windows：在任务计划程序里运行 CanvasHub-Web）。
 
 **Q：定时任务没跑？**
-运行 node cli.mjs doctor 看提示；日志在 logs/launchd-morning.log。手动触发一次：
-launchctl kickstart -k gui/$(id -u)/com.canvashub.morning
+运行 `node cli.mjs doctor` 看提示；日志在 `logs/` 目录。Windows 可在「任务计划程序」里右键任务手动运行一次。
 
-**Q：我的课程文件在别的地方，能直接用吗？**
-可以。把 config.json 的 download.root 改成你的课程目录，重新同步时系统会自动识别已有同名文件（不会重复下载）。
+**Q：我的课程资料已经在别的文件夹了？**
+把 `config.json` 的 `download.root` 指向那个目录即可，同名文件会被识别、不会重复下载。
 
 **Q：新加的课没有自动出现？**
-同步时从 Canvas 动态拉取，课程一发布就会自动建文件夹。也可以手动跑 node cli.mjs sync。
+课程一在 Canvas 上发布就会自动建文件夹；也可以手动跑 `node cli.mjs sync`。
 
 **Q：大纲权重不对 / 解析不出来？**
-把 syllabus PDF 放到对应课程文件夹（文件名含 syllabus），然后 node cli.mjs analyze --force。也可以在网页对话里直接说「把 5002 的评分组成设为 作业 40%、期末 60%」。
+确认课程文件夹里有文件名含 `syllabus` 的 PDF 或 HTML，然后 `node cli.mjs analyze --force`。也可以在网页对话里直接说「把 5002 的评分组成设为 作业 40%、期末 60%」。
 
 **Q：怎么完全卸载？**
-macOS：bash uninstall.sh；Windows：powershell -ExecutionPolicy Bypass -File uninstall.ps1。两者都只移除后台任务，不会删你的课程资料，然后删除程序目录即可。
+macOS / Linux 用 `bash uninstall.sh`，Windows 用 `powershell -ExecutionPolicy Bypass -File uninstall.ps1` —— 只移除后台任务，不会删你的课程资料。
 
-**Q（Windows）：计划任务在哪里看 / 怎么手动跑一次？**
-开始菜单搜「任务计划程序」→ 任务计划程序库 → 找到 CanvasHub-Morning / Evening / Web，右键「运行」即可立即执行。
+## 🏗 它是怎么工作的
 
-## 🔒 隐私与安全
+    同步（cli.mjs sync）
+      └─ Canvas API → 课程/模块/文件/作业/公告/成绩
+           ├─ 增量判断（data/state.json）
+           ├─ 分类（关键词 → DeepSeek 兜底）→ 落到 <课程>/<讲义|作业|阅读|其他>/
+           └─ 大纲解析（纯 JS PDF 提取 → DeepSeek 结构化）→ 评分权重 + 安全线
 
-- Canvas Token 存在本机 secrets.json（权限 600），DeepSeek Key 存在本机 data/settings.json（权限 600）
-- 数据不经过本机以外的任何服务器；Web 服务只监听 127.0.0.1，局域网内其他人访问不到
-- 不要把 secrets.json / data/ 发给别人，也不要把它们提交到公开仓库（.gitignore 已处理）
+    产出
+      ├─ out/web/          交互式看板（日历 / 对话 / 设置，SSE 流式）
+      ├─ out/digest/       每日摘要 + 周报
+      ├─ 飞书              日历日程 / 多维表格 / 消息卡片
+      └─ 系统通知          macOS 通知中心 / Windows Toast
 
-## 技术细节与已知限制
+    调度（scripts/schedule.mjs 统一抽象）
+      ├─ macOS   launchd（08:00 daily / 20:00 evening / 常驻 web）
+      ├─ Windows 任务计划程序（同上，Web 每 5 分钟自愈）
+      └─ Linux   crontab（打印配置，需手动加入）
 
-- CityU Canvas 禁用了课程级公告接口，本系统改用全局公告接口（context_codes 过滤）
-- Canvas 上的视频（Panopto 等外链）无法通过 API 下载，只能记录链接
-- 分类走「关键词优先 + DeepSeek 兜底」；拿不准的文件会留在「其他」
-- 文件下载走 Canvas 官方接口，遇到 url 字段为空时用 /api/v1/files/<id>/download 兜底
-- 飞书能力依赖 lark-cli 与你的飞书授权；未授权时相关步骤会自动跳过，不影响其它功能
+项目**零第三方依赖**，只用 Node 内置模块，不需要 `npm install`。
 
-## 开源与许可
+## 🗺 路线图
 
-- License：MIT（见 LICENSE），可自由使用、修改、分发
-- 发布到 GitHub 前请确认没有把 secrets.json / data/ / logs/ 提交上去（.gitignore 已屏蔽）
-- 想给同学发离线包：bash package.sh 生成 dist/canvas-hub-日期.zip，不含任何个人数据
-- 英文说明见 README.en.md
+- [x] Canvas 抓取、增量下载、分类归档
+- [x] Web 看板 + 日历周视图 + 截止热力图
+- [x] 成绩追踪 + 大纲权重解析 + 安全线倒推
+- [x] 行动清单（紧急度 × 权重）
+- [x] 飞书三件套（日历 / 多维表格 / 消息）
+- [x] AI 对话助手（工具调用 + 流式输出）
+- [x] 一键安装、环境体检、演示模式、中英双语、深色模式
+- [x] Windows / Linux 跨平台
+- [ ] 语义搜索（跨文件 / 公告 / 作业的自然语言检索）
+- [ ] 按作业自定义提醒时间
+- [ ] 讨论区与小测追踪
+- [ ] PWA（手机主屏、离线看板）
 
-## 更新记录
+## 🤝 贡献
 
-- P1：日历周视图 + 截止热力图、流式对话、深色模式、移动端适配
-- P0：成绩追踪、大纲权重解析与安全线倒推、行动清单、DeepSeek 智能分类
-- 修复：sync 冲掉大纲权重、空 url 文件下载失败、统计口径提示
+欢迎提 Issue 和 PR！提交前请读一下 [CONTRIBUTING.md](CONTRIBUTING.md)，核心原则是**保持零依赖**、可选功能要能优雅降级。
+
+## 📄 许可
+
+[MIT](LICENSE) · 自由使用、修改、分发。
+
+如果这个项目帮到了你，给个 ⭐ 就是最好的支持。
