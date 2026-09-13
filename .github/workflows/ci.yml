@@ -64,6 +64,35 @@ jobs:
           node cli.mjs demo --off
           echo "smoke test passed"
 
+      - name: Web server smoke without CANVAS_HUB_PORT
+        shell: bash
+        run: |
+          set -e
+          unset CANVAS_HUB_PORT
+          mkdir -p "$RUNNER_TEMP/courses"
+          export FILES_DIR="$RUNNER_TEMP/courses"
+          export CANVAS_URL="https://canvas.example.edu"
+          export CANVAS_TOKEN="dummy-token"
+          node scripts/gen-config.mjs
+          node cli.mjs demo
+          node server.mjs > web-smoke.log 2>&1 &
+          WEB_PID=$!
+          started=0
+          for i in $(seq 1 20); do
+            sleep 1
+            if curl -sf "http://127.0.0.1:8788/api/state" > /dev/null; then started=1; break; fi
+          done
+          if [ "$started" != "1" ]; then
+            echo "server did not start; log follows"
+            cat web-smoke.log
+            kill $WEB_PID 2>/dev/null || true
+            exit 1
+          fi
+          curl -sf "http://127.0.0.1:8788/api/state" | head -c 120
+          echo ""
+          kill $WEB_PID 2>/dev/null || true
+          echo "web server smoke passed (config-driven port)"
+
   powershell:
     name: Windows scripts (PowerShell + Task Scheduler)
     runs-on: windows-latest

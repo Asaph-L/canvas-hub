@@ -5,6 +5,9 @@ import { spawn } from 'node:child_process';
 import { ROOT, hkTime } from './src/util.mjs';
 import { updateAssessment, matchComponent } from './src/syllabus.mjs';
 
+// 配置读取辅助函数必须定义在最前面：下面的 PORT 常量就依赖它（曾因定义顺序在不同平台上表现不一致）
+const readJSON = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
+
 const PORT = Number(process.env.CANVAS_HUB_PORT || (readJSON(path.join(ROOT, 'config.json')) || {}).web?.port || 8788);
 const HOST = '127.0.0.1';
 const WEB_DIR = path.join(ROOT, 'out', 'web');
@@ -14,8 +17,6 @@ const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 const LOGS_DIR = path.join(ROOT, 'logs');
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.pdf': 'application/pdf', '.md': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.jpg': 'image/jpeg', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.zip': 'application/zip' };
-
-const readJSON = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
 
 function loadSettings() {
   const s = readJSON(SETTINGS_PATH) || {};
