@@ -67,8 +67,15 @@
 
 ### 第 1 步：拿到程序
 
+推荐用 git（方便以后 `git pull` 更新）：
+
     git clone https://github.com/Asaph-L/canvas-hub.git
     cd canvas-hub
+
+或者直接下载打包好的版本（[Releases](https://github.com/Asaph-L/canvas-hub/releases)）：
+
+- **Windows**：下载 `canvas-hub-*-windows.zip` 并解压
+- **macOS / Linux**：下载 `canvas-hub-*-macos-linux.tar.gz`，执行 `tar -xzf canvas-hub-*.tar.gz && cd canvas-hub-*`
 
 ### 第 2 步：生成 Canvas Token
 

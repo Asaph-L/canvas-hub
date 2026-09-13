@@ -46,8 +46,15 @@ Requirements: **macOS, Windows or Linux** and Node.js 18+. If Node is missing, t
 
 ### 1. Get the code
 
+Recommended (easy updates with `git pull`):
+
     git clone https://github.com/Asaph-L/canvas-hub.git
     cd canvas-hub
+
+Or download a packaged build from [Releases](https://github.com/Asaph-L/canvas-hub/releases):
+
+- **Windows**: download `canvas-hub-*-windows.zip` and unzip it
+- **macOS / Linux**: download `canvas-hub-*-macos-linux.tar.gz`, then `tar -xzf canvas-hub-*.tar.gz && cd canvas-hub-*`
 
 ### 2. Create a Canvas token
 
