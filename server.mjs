@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -480,6 +481,9 @@ async function handle(req, res, ctx) {
     }
 
     if (p === '/api/health') {
+      // 离线探测只需要一个 200；版本、证书指纹等细节仅在本机或已鉴权时返回
+      const trusted = loopback || tokenMatches(tokenFromRequest(req, u), token);
+      if (!trusted) return sendJSON(res, 200, { ok: true });
       return sendJSON(res, 200, {
         ok: true,
         app: 'canvas-hub',
@@ -512,6 +516,16 @@ async function handle(req, res, ctx) {
     if (p === '/manifest.webmanifest') {
       res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
       return res.end(JSON.stringify(MANIFEST, null, 2) + '\n');
+    }
+    if (p === '/sw.js') {
+      // 用 index.html 的内容哈希当缓存版本号：前端一改，Service Worker 必然更新，
+      // 已装到手机桌面的旧版本不会卡在旧样式（人工改版本号迟早会忘）
+      const html = fs.readFileSync(path.join(WEB_DIR, 'index.html'));
+      const tag = 'chub-' + crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
+      let sw = fs.readFileSync(path.join(WEB_DIR, 'sw.js'), 'utf8');
+      sw = sw.replace(/const VERSION = '[^']*';/, "const VERSION = '" + tag + "';");
+      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(sw);
     }
 
     // 鉴权：局域网（非回环）访问必须带令牌；本机始终免验证

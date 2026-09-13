@@ -99,6 +99,7 @@ console.log('[2] PWA 资源');
   const sw = await request('http://127.0.0.1:' + PORT + '/sw.js');
   check('GET /sw.js → 200', sw.status === 200);
   check('sw.js 含 stale-while-revalidate 逻辑', sw.body.includes('stateStaleWhileRevalidate'));
+  check('sw.js 版本号由 index.html 哈希生成（前端改动必然触发更新）', /const VERSION = 'chub-[0-9a-f]{12}';/.test(sw.body));
   const mf = await request('http://127.0.0.1:' + PORT + '/manifest.webmanifest');
   let manifest = null;
   try { manifest = JSON.parse(mf.body); } catch {}

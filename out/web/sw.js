@@ -8,7 +8,8 @@
 //
 // 令牌通过 Cookie 传递，缓存里只会有本机自己的数据，不会跨设备共享。
 
-const VERSION = 'chub-v1';
+// 每次改前端（HTML/CSS/JS）都要递增：浏览器检测到 sw.js 变化才会重新安装并刷新壳缓存
+const VERSION = 'chub-v2';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 const SHELL_URLS = [
@@ -89,10 +90,13 @@ function offlinePayload() {
 }
 
 async function shellNavigation(request) {
+  const cache = await caches.open(SHELL);
   try {
-    return await fetch(request);
+    const res = await fetch(request);
+    // 联网时顺便刷新离线副本，否则"离线兜底"会一直停留在旧版本的前端
+    if (res && res.ok) cache.put('/index.html', res.clone());
+    return res;
   } catch {
-    const cache = await caches.open(SHELL);
     const hit = (await cache.match('/index.html')) || (await cache.match('/'));
     if (hit) return hit;
     return new Response('离线且没有缓存', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
