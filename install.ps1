@@ -1,4 +1,4 @@
-# Canvas 课程管家 · Windows 安装向导
+﻿# Canvas 课程管家 · Windows 安装向导
 #  交互式：   powershell -ExecutionPolicy Bypass -File install.ps1
 #  无人值守： $env:NONINTERACTIVE='1'; $env:CANVAS_TOKEN='xxx'; powershell -ExecutionPolicy Bypass -File install.ps1
 #
@@ -202,8 +202,25 @@ if ($EnableSchedule -eq '1' -or $EnableWeb -eq '1') {
 }
 
 if ($EnableWeb -eq '1') {
-  Start-Sleep -Seconds 3
-  Start-Process "http://127.0.0.1:$Port"
+  Write-Host ''
+  Ok '正在等待 Web 看板启动 …'
+  $ready = $false
+  for ($i = 0; $i -lt 25; $i++) {
+    Start-Sleep -Seconds 1
+    try {
+      $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/state" -TimeoutSec 3 -UseBasicParsing
+      if ($resp.StatusCode -eq 200) { $ready = $true; break }
+    } catch { }
+  }
+  if ($ready) {
+    Ok "看板已就绪：http://127.0.0.1:$Port"
+    Start-Process "http://127.0.0.1:$Port"
+  } else {
+    Warn2 '看板还没起来，下面是日志末尾（便于排查）：'
+    if (Test-Path 'logs/launchd-web.log') { Get-Content 'logs/launchd-web.log' -Tail 15 }
+    Write-Host '  也可以手动前台启动看报错：node server.mjs'
+    Write-Host '  或手动触发计划任务：schtasks /Run /TN CanvasHub-Web'
+  }
 }
 
 if ($EnableLark -eq '1') {

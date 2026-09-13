@@ -139,47 +139,72 @@ function macStatus() {
 
 /* ---------------- Windows: Task Scheduler ---------------- */
 
+// VBS 只负责「隐藏窗口运行一个 .cmd」；真正的命令与日志重定向写在 .cmd 里，
+// 这样 Windows 上也能像 macOS 一样在 logs/ 里看到输出，出问题好排查。
 const VBS = [
   'Set sh = CreateObject("WScript.Shell")',
-  'cmd = ""',
-  'For Each a In WScript.Arguments',
-  '  cmd = cmd & """" & a & """ "',
-  'Next',
-  'sh.Run cmd, 0, False',
+  'If WScript.Arguments.Count = 0 Then WScript.Quit 1',
+  'sh.Run """" & WScript.Arguments(0) & """", 0, False',
 ].join('\r\n');
 
-function winWriteVbs() {
+function winWriteWrapper(name, args, logName) {
   const dir = path.join(ROOT, 'scripts');
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, 'run-hidden.vbs');
-  fs.writeFileSync(file, VBS + '\r\n');
-  return file;
+  const vbs = path.join(dir, 'run-hidden.vbs');
+  fs.writeFileSync(vbs, VBS + '\r\n');
+  const lines = [
+    '@echo off',
+    'cd /d "%~dp0.."',
+    'if not exist "logs" mkdir "logs"',
+    '"' + NODE_BIN + '" ' + args.map((a) => '"' + a + '"').join(' ') + ' >> "logs\\' + logName + '.log" 2>&1',
+  ];
+  const cmdPath = path.join(dir, name);
+  fs.writeFileSync(cmdPath, lines.join('\r\n') + '\r\n');
+  return { vbs, cmdPath };
 }
 
-function winTaskCommand(vbs, args) {
-  const parts = ['wscript.exe', '"' + vbs + '"', '"' + NODE_BIN + '"'];
-  for (const a of args) parts.push('"' + a + '"');
-  return parts.join(' ');
+function winTaskCommand(vbs, cmdPath) {
+  return 'wscript.exe "' + vbs + '" "' + cmdPath + '"';
 }
+
+const FAKE_WIN = process.env.CANVAS_HUB_FAKE_WIN === '1';
 
 function winCreate(name, tr, schedule) {
   spawnSync('schtasks', ['/Delete', '/F', '/TN', name], { encoding: 'utf8' });
   const args = ['/Create', '/F', '/TN', name, '/TR', tr];
   if (schedule.minute != null) args.push('/SC', 'MINUTE', '/MO', String(schedule.minute));
   else args.push('/SC', 'DAILY', '/ST', schedule.time);
+  if (FAKE_WIN) { log('[模拟] schtasks ' + args.join(' ')); return; }
   const r = spawnSync('schtasks', args, { encoding: 'utf8' });
   if (r.status === 0) log('✅ 已创建计划任务：' + name);
   else log('⚠️ 创建失败：' + name + ' ' + ((r.stderr || r.stdout || '').trim().slice(0, 200)));
 }
 
+function winRunNow(name) {
+  if (FAKE_WIN) { log('[模拟] schtasks /Run /TN ' + name); return; }
+  const r = spawnSync('schtasks', ['/Run', '/TN', name], { encoding: 'utf8' });
+  if (r.status === 0) log('▶️  已立即启动：' + name);
+  else log('⚠️ 立即启动失败：' + name + ' ' + ((r.stderr || r.stdout || '').trim().slice(0, 160)));
+}
+
 function winInstall() {
-  const vbs = winWriteVbs();
   const cli = path.join(ROOT, 'cli.mjs');
-  if (WANT_MORNING) winCreate(WIN_TASKS.morning, winTaskCommand(vbs, [cli, 'daily']), { time: MORNING });
-  if (WANT_EVENING) winCreate(WIN_TASKS.evening, winTaskCommand(vbs, [cli, 'evening']), { time: EVENING });
-  // 每 5 分钟拉起一次 Web 服务；已在运行时新实例会因端口占用而立即退出，等价于"常驻"
-  if (WANT_WEB) winCreate(WIN_TASKS.web, winTaskCommand(vbs, [path.join(ROOT, 'server.mjs')]), { minute: 5 });
-  log('提示：可在「任务计划程序」里查看 CanvasHub-* 三个任务。');
+  const server = path.join(ROOT, 'server.mjs');
+  if (WANT_MORNING) {
+    const w = winWriteWrapper('task-morning.cmd', [cli, 'daily'], 'launchd-morning');
+    winCreate(WIN_TASKS.morning, winTaskCommand(w.vbs, w.cmdPath), { time: MORNING });
+  }
+  if (WANT_EVENING) {
+    const w = winWriteWrapper('task-evening.cmd', [cli, 'evening'], 'launchd-evening');
+    winCreate(WIN_TASKS.evening, winTaskCommand(w.vbs, w.cmdPath), { time: EVENING });
+  }
+  if (WANT_WEB) {
+    const w = winWriteWrapper('task-web.cmd', [server], 'launchd-web');
+    // 每 5 分钟检查一次：已在运行则新实例因端口被占用而立即退出，等价于"常驻"
+    winCreate(WIN_TASKS.web, winTaskCommand(w.vbs, w.cmdPath), { minute: 5 });
+    winRunNow(WIN_TASKS.web);   // 立刻启动，否则要等到下一个 5 分钟边界
+  }
+  log('提示：可在「任务计划程序」里查看 CanvasHub-* 三个任务；日志在 logs/launchd-*.log。');
 }
 
 function winRemove() {
@@ -207,7 +232,7 @@ function linuxHelp() {
 
 /* ---------------- 入口 ---------------- */
 
-const platform = process.platform;
+const platform = FAKE_WIN ? 'win32' : process.platform;
 if (action === 'install') {
   if (platform === 'darwin') macInstall();
   else if (platform === 'win32') winInstall();
