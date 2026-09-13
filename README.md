@@ -6,6 +6,9 @@
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-success)
 [![Stars](https://img.shields.io/github/stars/Asaph-L/canvas-hub?style=social)](https://github.com/Asaph-L/canvas-hub/stargazers)
+[![文档：中文](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-%E4%B8%AD%E6%96%87-blue.svg)](README.md)
+[![Docs: English](https://img.shields.io/badge/docs-English-lightgrey.svg)](README.en.md)
+[![Release](https://img.shields.io/github/v/release/Asaph-L/canvas-hub?color=orange)](https://github.com/Asaph-L/canvas-hub/releases)
 
 > 把 Canvas 上的课程资料、作业、成绩、公告自动抓到本地整理好，并在**网页看板 / 飞书 / 系统通知**里提醒你 —— 还能解析课程大纲的评分权重，告诉你「这门课的期末要考多少分才安全」。
 

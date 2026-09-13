@@ -6,6 +6,9 @@
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-success)
 [![Stars](https://img.shields.io/github/stars/Asaph-L/canvas-hub?style=social)](https://github.com/Asaph-L/canvas-hub/stargazers)
+[![Docs: English](https://img.shields.io/badge/docs-English-blue.svg)](README.en.md)
+[![文档：中文](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-%E4%B8%AD%E6%96%87-lightgrey.svg)](README.md)
+[![Release](https://img.shields.io/github/v/release/Asaph-L/canvas-hub?color=orange)](https://github.com/Asaph-L/canvas-hub/releases)
 
 > Pulls your Canvas course materials, assignments, grades and announcements onto your own machine, organises them into folders, and surfaces everything in a **web dashboard / Feishu / native notifications** — including syllabus weight parsing, so it can tell you *"what do I need on the final to stay safe?"*
 
