@@ -18,6 +18,16 @@
 
 ---
 
+## ✨ Features
+
+- **Sync & organise** — active courses discovered dynamically (new courses get a folder automatically), incremental downloads, classification into `讲义 / 作业 / 阅读 / 其他` (Lecture / Assignment / Reading / Other) with an LLM fallback
+- **Dashboard** — course cards, 10-day deadline countdown, new-file feed, click a file name to open it locally; week calendar and a GitHub-style deadline heatmap
+- **Grades & planning** — current Canvas scores, assessment weights parsed from your syllabus PDF, "what you need on the final" calculation with two scenarios, and a to-do list ranked by urgency × weight
+- **Reminders** — daily sync at 08:00 and deadline check at 20:00 (missed runs catch up on wake), daily digest plus a Sunday weekly report, delivered through native notifications, Feishu messages and Feishu calendar events
+- **AI assistant** — ask "which course is most at risk?", "update my data", or "set the final exam weight to 55%"; it calls tools and streams the answer
+- **Bilingual UI** (Chinese / English), dark mode, mobile-friendly
+- **Zero dependencies** — plain Node.js built-ins, no `npm install`
+
 ## 📸 Screenshots
 
 | Dashboard: what to do next, deadlines, courses | Calendar: week view + deadline heatmap |
@@ -29,16 +39,6 @@
 | ![Settings](docs/screenshots/settings.png) | ![Mobile](docs/screenshots/mobile.png) |
 
 > Screenshots use built-in demo data — run `node cli.mjs demo` to see the same on your machine.
-
-## ✨ Features
-
-- **Sync & organise** — active courses discovered dynamically (new courses get a folder automatically), incremental downloads, classification into `讲义 / 作业 / 阅读 / 其他` (Lecture / Assignment / Reading / Other) with an LLM fallback
-- **Dashboard** — course cards, 10-day deadline countdown, new-file feed, click a file name to open it locally; week calendar and a GitHub-style deadline heatmap
-- **Grades & planning** — current Canvas scores, assessment weights parsed from your syllabus PDF, "what you need on the final" calculation with two scenarios, and a to-do list ranked by urgency × weight
-- **Reminders** — daily sync at 08:00 and deadline check at 20:00 (missed runs catch up on wake), daily digest plus a Sunday weekly report, delivered through native notifications, Feishu messages and Feishu calendar events
-- **AI assistant** — ask "which course is most at risk?", "update my data", or "set the final exam weight to 55%"; it calls tools and streams the answer
-- **Bilingual UI** (Chinese / English), dark mode, mobile-friendly
-- **Zero dependencies** — plain Node.js built-ins, no `npm install`
 
 ## 🚀 Quick start
 

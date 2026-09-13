@@ -18,18 +18,6 @@
 
 ---
 
-## 📸 界面预览
-
-| 看板：下一步做什么 + 截止 + 课程卡片 | 日历：周视图 + 截止热力图 |
-| --- | --- |
-| ![看板](docs/screenshots/dashboard.png) | ![日历](docs/screenshots/calendar.png) |
-
-| 设置：API / 手动操作 / 飞书入口 | 移动端自适应（深色模式同款布局） |
-| --- | --- |
-| ![设置](docs/screenshots/settings.png) | ![移动端](docs/screenshots/mobile.png) |
-
-> 截图使用内置演示数据生成，执行 `node cli.mjs demo` 即可在你自己的电脑上看到同样的界面。
-
 ## ✨ 核心能力
 
 **📥 抓取与归档**
@@ -57,6 +45,18 @@
 - 网页里直接问：「我哪门课最危险？」「期末要考多少分？」「帮我更新一下」
 - 支持工具调用：会话里说「更新」它会真的去跑同步并汇报结果
 - 也可以一句话改数据：「把 5003 的期末权重改成 55%」
+
+## 📸 界面预览
+
+| 看板：下一步做什么 + 截止 + 课程卡片 | 日历：周视图 + 截止热力图 |
+| --- | --- |
+| ![看板](docs/screenshots/dashboard.png) | ![日历](docs/screenshots/calendar.png) |
+
+| 设置：API / 手动操作 / 飞书入口 | 移动端自适应（深色模式同款布局） |
+| --- | --- |
+| ![设置](docs/screenshots/settings.png) | ![移动端](docs/screenshots/mobile.png) |
+
+> 截图使用内置演示数据生成，执行 `node cli.mjs demo` 即可在你自己的电脑上看到同样的界面。
 
 ## 🚀 快速开始
 
