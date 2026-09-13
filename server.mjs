@@ -1,9 +1,14 @@
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ROOT, hkTime } from './src/util.mjs';
 import { updateAssessment, matchComponent } from './src/syllabus.mjs';
+import { ensureCertificate, describeCertificate } from './src/cert.mjs';
+import { lanHosts, ensureToken, regenerateToken, tokenMatches, tokenFromRequest, isLoopback, isLocalNetwork, pemToDer, mobileConfig, helperPage } from './src/lan.mjs';
+import { qrSvg } from './src/qr.mjs';
+import { iconFor, MANIFEST } from './src/icons.mjs';
 
 // 配置读取辅助函数必须定义在最前面：下面的 PORT 常量就依赖它（曾因定义顺序在不同平台上表现不一致）
 const readJSON = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
@@ -15,6 +20,58 @@ const DATA_DIR = path.join(ROOT, 'data');
 const SECRETS_PATH = path.join(ROOT, 'secrets.json');
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 const LOGS_DIR = path.join(ROOT, 'logs');
+
+const WEB_CFG = (readJSON(path.join(ROOT, 'config.json')) || {}).web || {};
+const LAN_HTTPS_PORT = Number(process.env.CANVAS_HUB_LAN_PORT || WEB_CFG.lanPort || PORT + 1);
+const LAN_HELPER_PORT = Number(process.env.CANVAS_HUB_HELPER_PORT || WEB_CFG.helperPort || PORT + 2);
+const TLS_DIR = path.join(DATA_DIR, 'tls');
+const VERSION = (() => { try { return fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim(); } catch { return 'dev'; } })();
+
+// 手机端只需要「状态数据」：静态壳/图标/证书都不敏感，只有接口与课程文件走令牌
+const PUBLIC_PATHS = new Set([
+  '/', '/index.html', '/sw.js', '/manifest.webmanifest', '/favicon.ico', '/favicon.png', '/api/health',
+  '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png',
+]);
+const ICON_ROUTES = { '/icon-192.png': '192', '/icon-512.png': '512', '/icon-maskable-512.png': 'maskable', '/apple-touch-icon.png': 'apple', '/favicon.png': 'favicon', '/favicon.ico': 'favicon' };
+
+function lanEnabled() {
+  const s = readJSON(SETTINGS_PATH) || {};
+  return s.lanEnabled !== false;
+}
+
+function setLanEnabled(v) {
+  const s = readJSON(SETTINGS_PATH) || {};
+  s.lanEnabled = !!v;
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2));
+  try { fs.chmodSync(SETTINGS_PATH, 0o600); } catch {}
+}
+
+let tlsCache = null;
+function tlsContext() {
+  if (tlsCache) return tlsCache;
+  const hosts = ['localhost', '127.0.0.1', ...lanHosts().map((h) => h.address)];
+  const cert = ensureCertificate(TLS_DIR, hosts);
+  tlsCache = { key: cert.key, cert: cert.cert, caDer: cert.caDer, caPem: cert.caCertPem, hosts };
+  return tlsCache;
+}
+
+function lanUrls() {
+  const hosts = lanHosts().map((h) => h.address);
+  const ip = hosts[0] || '127.0.0.1';
+  return {
+    hosts,
+    https: 'https://' + ip + ':' + LAN_HTTPS_PORT,
+    helper: 'http://' + ip + ':' + LAN_HELPER_PORT,
+    local: 'http://127.0.0.1:' + PORT,
+  };
+}
+
+function issueTokenCookie(res, token, secure) {
+  const parts = ['chub_token=' + token, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=31536000'];
+  if (secure) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.pdf': 'application/pdf', '.md': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.jpg': 'image/jpeg', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.zip': 'application/zip' };
 
@@ -327,11 +384,119 @@ function readBody(req) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+async function handle(req, res, ctx) {
   const u = new URL(req.url, 'http://x');
   const p = decodeURIComponent(u.pathname);
+  const loopback = isLoopback(req.socket.remoteAddress);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
   try {
-    if (p === '/api/state') return sendJSON(res, 200, buildStatePayload());
+    const token = ensureToken(DATA_DIR);
+    const urls = lanUrls();
+
+    // 证书分发：必须在手机「信任」之前就能拿到，所以不要求令牌
+    if (p === '/ca.crt' || p === '/ca.pem') {
+      const tls = tlsContext();
+      res.writeHead(200, { 'Content-Type': 'application/x-pem-file', 'Content-Disposition': 'attachment; filename=canvas-hub-ca.crt', 'Cache-Control': 'no-store' });
+      return res.end(tls.caPem);
+    }
+    if (p === '/ca.cer' || p === '/ca.der') {
+      const tls = tlsContext();
+      res.writeHead(200, { 'Content-Type': 'application/x-x509-ca-cert', 'Content-Disposition': 'attachment; filename=canvas-hub-ca.cer', 'Cache-Control': 'no-store' });
+      return res.end(tls.caDer);
+    }
+    if (p === '/ca.mobileconfig') {
+      const tls = tlsContext();
+      res.writeHead(200, { 'Content-Type': 'application/x-apple-aspen-config', 'Content-Disposition': 'attachment; filename=canvas-hub.mobileconfig', 'Cache-Control': 'no-store' });
+      return res.end(mobileConfig(tls.caDer, urls.hosts));
+    }
+
+    // 助手端口（纯 HTTP）：只用于分发证书与安装说明
+    if (ctx && ctx.mode === 'helper') {
+      if (p === '/' || p === '/index.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(helperPage({ httpsUrl: urls.https, hosts: urls.hosts, port: LAN_HELPER_PORT }));
+      }
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('此端口仅用于分发证书，看板请访问 https://' + (urls.hosts[0] || '127.0.0.1') + ':' + LAN_HTTPS_PORT + '/');
+    }
+
+    if (p === '/api/health') return sendJSON(res, 200, { ok: true, app: 'canvas-hub', version: VERSION, lan: lanEnabled() });
+
+    // PWA 资源：图标运行时生成（仓库里不放二进制），清单动态输出
+    if (ICON_ROUTES[p]) {
+      const buf = iconFor(ICON_ROUTES[p]);
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800', 'Content-Length': buf.length });
+      return res.end(buf);
+    }
+    if (p === '/manifest.webmanifest') {
+      res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+      return res.end(JSON.stringify(MANIFEST, null, 2) + '\n');
+    }
+
+    // 鉴权：局域网（非回环）访问必须带令牌；本机始终免验证
+    if (ctx && ctx.mode === 'lan' && !loopback) {
+      if (!isLocalNetwork(req.socket.remoteAddress)) {
+        return sendJSON(res, 403, { ok: false, error: '只允许局域网访问' });
+      }
+      const tokenOk = tokenMatches(tokenFromRequest(req, u), token);
+      // 扫码进入：写 Cookie 并把令牌从地址栏抹掉（静态页同样要处理，否则令牌会留在浏览历史里）
+      if (tokenOk && u.searchParams.has('t') && req.method === 'GET' && !p.startsWith('/api/')) {
+        issueTokenCookie(res, token, true);
+        const keep = new URLSearchParams(u.searchParams);
+        keep.delete('t');
+        const qs = keep.toString();
+        res.writeHead(302, { Location: p + (qs ? '?' + qs : '') });
+        return res.end();
+      }
+      // 静态壳与图标是公开的：手机先看到界面，再由界面提示配对
+      if (!PUBLIC_PATHS.has(p) && !tokenOk) {
+        return sendJSON(res, 401, { ok: false, error: 'unauthorized', hint: '请在电脑端「设置 → 手机配对」重新扫码' });
+      }
+    }
+
+    // 配对信息只在本机可见：令牌绝不经过局域网
+    if (p === '/api/pair') {
+      if (!loopback) return sendJSON(res, 403, { ok: false, error: '仅本机可见' });
+      const pairUrl = urls.https + '/?t=' + token;
+      return sendJSON(res, 200, {
+        ok: true,
+        enabled: lanEnabled(),
+        local: urls.local,
+        httpsUrl: urls.https,
+        helperUrl: urls.helper,
+        pairUrl,
+        token,
+        // 二维码固定白底：深色主题下透明底会导致手机扫不出来
+        qr: qrSvg(pairUrl, { ecc: 'M', light: '#ffffff' }),
+        qrHelper: qrSvg(urls.helper, { ecc: 'M', light: '#ffffff' }),
+      });
+    }
+    if (p === '/api/lan') {
+      if (!loopback) return sendJSON(res, 403, { ok: false, error: '仅本机可见' });
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        if (b.regenerateToken) {
+          const t = regenerateToken(DATA_DIR);
+          return sendJSON(res, 200, { ok: true, token: t });
+        }
+        if (typeof b.enabled === 'boolean') {
+          if (b.enabled) {
+            const started = await startLanServers();
+            if (!started.ok) return sendJSON(res, 200, { ok: false, enabled: false, error: started.error });
+            setLanEnabled(true);
+            const u2 = lanUrls();
+            return sendJSON(res, 200, { ok: true, enabled: true, httpsUrl: u2.https, helperUrl: u2.helper });
+          }
+          stopLanServers();
+          setLanEnabled(false);
+          return sendJSON(res, 200, { ok: true, enabled: false });
+        }
+      }
+      return sendJSON(res, 200, { ok: true, enabled: lanEnabled(), ...urls });
+    }
+
+    if (p === '/api/state') return sendJSON(res, 200, { ...buildStatePayload(), local: loopback, version: VERSION });
     if (p === '/api/status') return sendJSON(res, 200, { ok: true, text: latestSyncLogTail() });
     if (p === '/api/settings' && req.method === 'GET') {
       const s = loadSettings();
@@ -398,11 +563,17 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     sendJSON(res, 500, { ok: false, error: String(e.message || e) });
   }
-});
+}
 
-// 端口已被占用时优雅退出（Windows 计划任务每 5 分钟拉起一次，靠这个实现"常驻"）
-server.on('error', (e) => {
+// ---------- 三个监听器 ----------
+// 1) 本机 HTTP：桌面看板，免令牌（本机即可信边界）
+// 2) 局域网 HTTPS：手机看板/PWA，令牌 + 仅私有网段
+// 3) 局域网 HTTP 助手端口：只发证书，供手机在"信任之前"下载 CA
+const localServer = http.createServer((req, res) => handle(req, res, { mode: 'local' }));
+
+localServer.on('error', (e) => {
   if (e && e.code === 'EADDRINUSE') {
+    // Windows 计划任务每 5 分钟拉起一次，靠退出码 0 实现"常驻"
     console.log('端口 ' + PORT + ' 已被占用：服务应已在运行，本次退出。');
     process.exit(0);
   }
@@ -410,6 +581,71 @@ server.on('error', (e) => {
   process.exit(1);
 });
 
-server.listen(PORT, HOST, () => {
+let lanServers = null;
+
+function listenOn(server, port, host) {
+  return new Promise((resolve) => {
+    const onError = (e) => { server.removeListener('listening', onOk); resolve({ ok: false, error: String((e && e.message) || e) }); };
+    const onOk = () => { server.removeListener('error', onError); resolve({ ok: true }); };
+    server.once('error', onError);
+    server.once('listening', onOk);
+    server.listen(port, host);
+  });
+}
+
+/** 启动手机端监听器（可由设置页随时开关） */
+async function startLanServers() {
+  if (lanServers) return { ok: true, alreadyRunning: true };
+  let tls;
+  try {
+    tls = tlsContext();
+  } catch (e) {
+    return { ok: false, error: '自签证书生成失败：' + ((e && e.message) || e) };
+  }
+  const lanServer = https.createServer({ key: tls.key, cert: tls.cert }, (req, res) => handle(req, res, { mode: 'lan' }));
+  const helperServer = http.createServer((req, res) => handle(req, res, { mode: 'helper' }));
+  const a = await listenOn(lanServer, LAN_HTTPS_PORT, '0.0.0.0');
+  const b = a.ok ? await listenOn(helperServer, LAN_HELPER_PORT, '0.0.0.0') : { ok: false, error: '' };
+  if (!a.ok || !b.ok) {
+    try { lanServer.close(); } catch {}
+    try { helperServer.close(); } catch {}
+    const parts = [];
+    if (!a.ok) parts.push('HTTPS 端口 ' + LAN_HTTPS_PORT + ' 不可用（' + a.error + '）');
+    if (!b.ok) parts.push('助手端口 ' + LAN_HELPER_PORT + ' 不可用' + (b.error ? '（' + b.error + '）' : ''));
+    return { ok: false, error: parts.join('；') };
+  }
+  lanServers = { lanServer, helperServer };
+  const urls = lanUrls();
+  console.log('手机端看板已启动：' + urls.https + '/?t=' + ensureToken(DATA_DIR));
+  console.log('  证书指纹：' + describeCert(tls.caPem));
+  console.log('  手机首次使用：先访问 ' + urls.helper + '/ 安装根证书');
+  return { ok: true };
+}
+
+function stopLanServers() {
+  if (!lanServers) return;
+  try { lanServers.lanServer.close(); } catch {}
+  try { lanServers.helperServer.close(); } catch {}
+  lanServers = null;
+  console.log('已关闭手机端（局域网）访问：可在桌面看板「设置 → 手机配对」重新开启。');
+}
+
+localServer.listen(PORT, HOST, () => {
   console.log('Canvas 课程管家 Web 已启动：http://' + HOST + ':' + PORT);
+  if (!lanEnabled()) {
+    console.log('手机端（局域网）访问已关闭：可在看板「设置 → 手机配对」中开启。');
+    return;
+  }
+  startLanServers().then((r) => {
+    if (!r.ok) console.error('手机端访问未启动：' + r.error + '（桌面看板不受影响）');
+  });
 });
+
+function describeCert(pem) {
+  try {
+    return describeCertificate(pem).fingerprint;
+  } catch {
+    return '(未知)';
+  }
+}
+

@@ -93,6 +93,19 @@ jobs:
           kill $WEB_PID 2>/dev/null || true
           echo "web server smoke passed (config-driven port)"
 
+      - name: PWA / LAN self-test (manifest, service worker, token auth, certs)
+        shell: bash
+        run: |
+          set -e
+          mkdir -p "$RUNNER_TEMP/courses"
+          export FILES_DIR="$RUNNER_TEMP/courses"
+          export CANVAS_URL="https://canvas.example.edu"
+          export CANVAS_TOKEN="dummy-token"
+          node scripts/gen-config.mjs
+          node cli.mjs demo
+          node scripts/selftest-pwa.mjs
+          node cli.mjs demo --off
+
   powershell:
     name: Windows scripts (PowerShell + Task Scheduler)
     runs-on: windows-latest

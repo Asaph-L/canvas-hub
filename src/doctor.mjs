@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import https from 'node:https';
 import { spawnSync } from 'node:child_process';
 import { ROOT, loadConfig, log } from './util.mjs';
 import { larkStatus, larkEnabled, larkBin } from './larkrun.mjs';
+import { lanHosts } from './lan.mjs';
 
 function readSettings() {
   try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'settings.json'), 'utf8')) || {}; } catch { return {}; }
@@ -62,6 +64,33 @@ export async function doctor() {
     else warn('Web 服务响应异常（HTTP ' + r.status + '）');
   } catch {
     warn('Web 看板未运行', 'launchctl kickstart -k gui/$(id -u)/com.canvashub.web 或 node server.mjs');
+  }
+
+  // 手机端看板（PWA 离线看板）：HTTPS + 访问令牌 + 自签证书
+  const settings = readSettings();
+  const lanPort = Number(process.env.CANVAS_HUB_LAN_PORT || (cfg.web && cfg.web.lanPort) || port + 1);
+  const helperPort = Number(process.env.CANVAS_HUB_HELPER_PORT || (cfg.web && cfg.web.helperPort) || port + 2);
+  const lanIps = lanHosts().map((h) => h.address);
+  if (settings.lanEnabled === false) {
+    warn('手机端看板已关闭', '在网页「设置 → 手机配对」中开启局域网访问');
+  } else if (!lanIps.length) {
+    warn('未找到局域网地址，手机暂时连不上本机', '确认已连上 WiFi（需要 192.168.x / 10.x 之类的私有地址）');
+  } else {
+    const tlsDir = path.join(ROOT, 'data', 'tls');
+    const certOk = ['ca.pem', 'server.pem', 'server.key'].every((f) => fs.existsSync(path.join(tlsDir, f)));
+    const alive = await new Promise((resolve) => {
+      const req = https.request({ host: lanIps[0], port: lanPort, path: '/api/health', method: 'GET', rejectUnauthorized: false, timeout: 4000 }, (res) => {
+        res.resume();
+        resolve(res.statusCode === 200);
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+      req.end();
+    });
+    if (alive) ok('手机端看板运行中：https://' + lanIps[0] + ':' + lanPort + '（HTTPS + 访问令牌）');
+    else warn('手机端 HTTPS 端口 ' + lanPort + ' 未响应', '重启 Web 服务；若仍失败，检查该端口是否被占用');
+    if (certOk) ok('自签证书就绪，手机首次使用先装 CA：http://' + lanIps[0] + ':' + helperPort + '/');
+    else warn('自签证书尚未生成', 'Web 服务启动时会自动生成');
   }
 
   // 后台任务：交给跨平台调度层报告（macOS=launchd / Windows=计划任务 / Linux=crontab）

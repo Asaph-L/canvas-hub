@@ -25,6 +25,7 @@
 - **Grades & planning** — current Canvas scores, assessment weights parsed from your syllabus PDF, "what you need on the final" calculation with two scenarios, and a to-do list ranked by urgency × weight
 - **Reminders** — daily sync at 08:00 and deadline check at 20:00 (missed runs catch up on wake), daily digest plus a Sunday weekly report, delivered through native notifications, Feishu messages and Feishu calendar events
 - **AI assistant** — ask "which course is most at risk?", "update my data", or "set the final exam weight to 55%"; it calls tools and streams the answer
+- **Phone dashboard (PWA)** — open the dashboard on your phone, add it to your home screen, and **keep reading it offline**: a Service Worker caches the app shell plus the latest state, so the next deadline is available on the subway. LAN traffic goes over a local self-signed HTTPS cert with a one-time access token that is only ever shown on your computer
 - **Bilingual UI** (Chinese / English), dark mode, mobile-friendly
 - **Zero dependencies** — plain Node.js built-ins, no `npm install`
 
@@ -37,6 +38,10 @@
 | Settings: API keys, manual actions, Feishu | Mobile layout (dark mode included) |
 | --- | --- |
 | ![Settings](docs/screenshots/settings.png) | ![Mobile](docs/screenshots/mobile.png) |
+
+| Phone pairing: install the cert, then scan to open |
+| --- |
+| ![Phone pairing](docs/screenshots/pairing.png) |
 
 > Screenshots use built-in demo data — run `node cli.mjs demo` to see the same on your machine.
 
@@ -89,8 +94,47 @@ The wizard asks for install directory, course-file directory, Canvas URL/token, 
 | Scheduling | ✅ launchd | ✅ Task Scheduler | ⚠️ manual crontab |
 | Syllabus PDF parsing | ✅ Spotlight + pure JS | ✅ pure JS | ✅ pure JS |
 | Feishu integration | ✅ | ✅ | ✅ |
+| Phone dashboard (PWA) | ✅ | ✅ | ✅ |
 
-Windows notes: three tasks are created (`CanvasHub-Morning / Evening / Web`). The web task checks every 5 minutes whether the dashboard is alive (a second instance exits immediately when the port is taken), and runs through a VBS wrapper with a hidden window so no console flashes.
+Windows notes: three tasks are created (`CanvasHub-Morning / Evening / Web`). The web task checks every 5 minutes whether the dashboard is alive (a second instance exits immediately when the port is taken), and runs through a VBS wrapper with a hidden window so no console flashes. The first time you enable phone access, Windows Firewall asks whether Node.js may accept connections — choose Allow (LAN only).
+
+## 📱 Phone dashboard (PWA)
+
+The dashboard is useless when you are away from your desk. The phone build puts the same dashboard on your phone and **keeps working without a network**: check the next deadline on the subway, see what each course expects next.
+
+### Three steps
+
+1. **Enable it on the computer** — dashboard → Settings → Phone pairing → toggle **LAN access** (on by default); two QR codes appear
+2. **Install the certificate** — connect the phone to the same WiFi and scan the **left** QR code, then follow the on-screen steps (on iPhone also enable full trust under Settings → General → About → Certificate Trust Settings)
+3. **Open the dashboard** — scan the **right** QR code; the token is remembered automatically. Use the browser menu "Add to Home screen / Install app" and it keeps working offline
+
+> Why a certificate? Offline support needs a Service Worker, and browsers only allow that in a secure context. A LAN IP can never have a public certificate, so the app generates a **root certificate that belongs only to your computer** (10 years, restricted to private addresses such as `192.168.x.x`). Install it once on the phone — changing WiFi or IP does not require reinstalling it.
+
+### Privacy design
+
+| Mechanism | Detail |
+| --- | --- |
+| Localhost needs no token | `http://127.0.0.1:8788` is only reachable on your own machine and is not authenticated |
+| LAN requires a token | Phones use `https://<your-lan-ip>:8789` with a 32-character random token stored in `data/lan-token.txt` (mode 600) |
+| Tokens never leave the computer | The token is shown only on the **computer screen**; the pairing API returns 403 to LAN clients, and the certificate install page never contains it |
+| Regenerating invalidates instantly | "Regenerate" in Settings invalidates the old token immediately (phones must re-scan) |
+| Private networks only | Requests whose source IP is not in a private range (192.168.x / 10.x / 172.16-31.x) are rejected |
+| State data only | The Service Worker caches the app shell and `/api/state` only — **never course files** — so phone data and storage stay tiny |
+| Switch it off anytime | Turning LAN access off disconnects phones immediately (no certificate uninstall needed) |
+
+### Ports
+
+| Port | Purpose |
+| --- | --- |
+| 8788 | Desktop dashboard (HTTP, 127.0.0.1 only) |
+| 8789 | Phone dashboard (HTTPS, LAN) |
+| 8790 | Certificate install page (HTTP; ships the CA so the phone can download it *before* trusting it) |
+
+Change them in `config.json` if they clash:
+
+    { "web": { "port": 8788, "lanPort": 8789, "helperPort": 8790 } }
+
+> Phones only accept `https://<lan-ip>:<lanPort>`; after changing ports, re-pair by scanning the QR code in the desktop dashboard. `node cli.mjs doctor` reports the status of all three ports and the certificate.
 
 ## ⚙️ Optional
 
@@ -115,7 +159,7 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
 
 | Command | What it does |
 | --- | --- |
-| `node cli.mjs doctor` | Health check with fix suggestions |
+| `node cli.mjs doctor` | Health check (deps / Canvas / folders / dashboard / phone certificate) with fix suggestions |
 | `node cli.mjs daily` | Full pipeline (same as the 08:00 job) |
 | `node cli.mjs evening` | Sync + next-day deadline reminder |
 | `node cli.mjs sync` | Sync and download only |
@@ -128,6 +172,12 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
 ## ❓ FAQ
 
 **Token invalid (HTTP 401)?** Regenerate it in Canvas → Account → Settings → Approved Integrations, then paste it in the dashboard Settings page (or edit `secrets.json`).
+
+**Phone says the certificate is untrusted / cannot connect securely?** The root certificate is not installed or not trusted yet. Connect the phone to the same WiFi and scan the **left** QR code on the pairing page. On iPhone, after installing the profile you must also enable full trust under Settings → General → About → Certificate Trust Settings, otherwise Safari keeps blocking it.
+
+**Phone opens the dashboard but shows "pairing required"?** The request carried no token (you typed the address by hand, or the token was regenerated). Re-scan the **right** QR code from the desktop dashboard.
+
+**Desktop works, phone cannot connect?** Check in order: (1) phone and computer on the same WiFi — many campus networks isolate clients, try a phone hotspot; (2) the computer firewall allows Node.js; (3) run `node cli.mjs doctor`, which reports the LAN port and certificate status directly.
 
 **Windows: `git clone` fails with "Connection was reset"?** If your machine reaches GitHub through a system proxy (Clash / V2Ray on `127.0.0.1:2080` etc.), git does **not** read the Windows system/IE proxy — configure it explicitly:
 

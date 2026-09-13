@@ -2,8 +2,17 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1320" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="canvas-hub">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Canvas Course Hub</title>
 <style>
 :root {
@@ -134,6 +143,25 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
   .chat-box { height:64vh; }
   button.pill { padding:5px 11px; font-size:12px; }
   .dialog { max-height:90vh; }
+  .pair-grid { grid-template-columns:1fr; }
+  .qr-box svg { width:180px; height:180px; }
+}
+/* ---- 离线看板（PWA）---- */
+.offlinebar { background:var(--warn-bg); color:var(--warn-ink); border-bottom:1px solid var(--line); padding:8px 20px; font-size:13px; text-align:center; }
+.banner.offline { background:var(--warn-bg); color:var(--warn-ink); }
+.pairneeded { border:1px solid var(--warn-ink); }
+.pair-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-top:8px; }
+.qr-box { text-align:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; }
+.qr-box svg { width:200px; height:200px; display:block; margin:0 auto; }
+.qr-box .cap { font-size:12px; color:#4b5563; margin:8px 0 0; }
+.copyline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+.copyline code { flex:1 1 240px; background:var(--cat-bg); padding:8px 10px; border-radius:8px; font-size:12px; word-break:break-all; }
+.steps { font-size:12.5px; color:var(--sub); line-height:1.75; margin:8px 0 0; padding-left:20px; }
+.steps code { background:var(--cat-bg); padding:1px 5px; border-radius:5px; }
+@media (max-width: 480px) {
+  .qr-box svg { width:150px; height:150px; }
+  .heat-cell { width:14px; height:14px; }
+  .heat-grid { grid-template-rows:repeat(7, 14px); gap:3px; }
 }
 </style>
 </head>
@@ -153,7 +181,13 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
   </div>
 </div>
 <div id="banner" class="banner" style="display:none"></div>
+<div id="offlineBar" class="offlinebar" style="display:none"></div>
 <main>
+  <div id="pairNeeded" class="card pairneeded" style="display:none">
+    <h2 class="first" data-i18n="pairNeededTitle">🔒 需要配对</h2>
+    <p data-i18n="pairNeededBody">这台设备还没有访问令牌。请在电脑上打开看板 →「设置 → 手机配对」，用手机扫描二维码即可。</p>
+    <p class="hint" id="pairNeededHint"></p>
+  </div>
   <section id="tab-dash">
     <div class="pills" id="pills"></div>
     <div id="naSec"></div>
@@ -209,6 +243,44 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
       <div id="runState" class="hint" style="margin:10px 0"></div>
       <pre class="out" id="runOut" style="display:none"></pre>
     </div>
+    <div class="card" id="pairCard">
+      <h2 class="first" data-i18n="pairTitle">📱 手机配对（离线看板）</h2>
+      <div class="set-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="flex:0 0 auto" data-i18n="lanToggle">局域网访问</label>
+        <button class="btn" id="lanBtn" onclick="toggleLan()">…</button>
+        <span class="hint" id="lanState"></span>
+      </div>
+      <div id="pairBody" style="display:none">
+        <div class="pair-grid">
+          <div>
+            <div class="qr-box">
+              <div id="qrHelper"></div>
+              <p class="cap" data-i18n="pairStep1">① 先用手机扫这里，装根证书</p>
+            </div>
+            <div class="copyline"><code id="helperUrl"></code><button class="btn ghost" onclick="copyText('helperUrl')" data-i18n="copy">复制</button></div>
+          </div>
+          <div>
+            <div class="qr-box">
+              <div id="qrPair"></div>
+              <p class="cap" data-i18n="pairStep2">② 装好证书后扫这里，进看板</p>
+            </div>
+            <div class="copyline"><code id="pairUrl"></code><button class="btn ghost" onclick="copyText('pairUrl')" data-i18n="copy">复制</button></div>
+          </div>
+        </div>
+        <ol class="steps">
+          <li data-i18n="pairTip1">iPhone：设置 → 已下载描述文件 → 安装；再到「通用 → 关于本机 → 证书信任设置」打开完全信任。</li>
+          <li data-i18n="pairTip2">Android：设置 → 安全 → 加密与凭据 → 安装证书 → CA 证书，选刚下载的文件。</li>
+          <li data-i18n="pairTip3">进看板后用浏览器菜单「添加到主屏幕 / 安装应用」，之后没网也能打开最近一次同步的看板。</li>
+        </ol>
+        <div class="copyline">
+          <span class="hint" data-i18n="pairToken">访问令牌</span>
+          <code id="pairToken"></code>
+          <button class="btn ghost" onclick="regenToken()" data-i18n="pairRegen">重新生成</button>
+        </div>
+        <p class="hint" data-i18n="pairNote">令牌只显示在这台电脑上：安装页和二维码里都不会泄露；关闭局域网访问后，手机端立即失效。</p>
+      </div>
+      <div id="pairHidden" class="hint" style="display:none" data-i18n="pairLocalOnly">手机配对只在电脑端（localhost）可见 —— 当前页面来自局域网，出于隐私考虑不显示令牌。</div>
+    </div>
     <div class="card">
       <h2 class="first" data-i18n="feishuTitle">飞书入口</h2>
       <p class="hint"><span data-i18n="feishuBase">Base 看板：</span><a id="baseLink" href="#" target="_blank"></a></p>
@@ -255,7 +327,20 @@ var I18N = {
     footer: '本地服务 ', footerTail: ' · 数据来自 Canvas API',
     demoBanner: '📦 演示数据（DEMO）· 执行 node cli.mjs demo --off 退出演示',
     empty: '—', toggleLang: 'EN', days: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
-    assignTitle: '作业（', closeParen: '）', ptsSuffix: ' 分'
+    assignTitle: '作业（', closeParen: '）', ptsSuffix: ' 分',
+    pairTitle: '📱 手机配对（离线看板）', lanToggle: '局域网访问',
+    lanOn: '✅ 已开启', lanOff: '⭕ 已关闭', lanWorking: '处理中…', lanFail: '❌ 启动失败：',
+    copy: '复制', copied: '✅ 已复制',
+    pairStep1: '① 先用手机扫这里，装根证书', pairStep2: '② 装好证书后扫这里，进看板',
+    pairTip1: 'iPhone：设置 → 已下载描述文件 → 安装；再到「通用 → 关于本机 → 证书信任设置」打开完全信任。',
+    pairTip2: 'Android：设置 → 安全 → 加密与凭据 → 安装证书 → CA 证书，选刚下载的文件。',
+    pairTip3: '进看板后用浏览器菜单「添加到主屏幕 / 安装应用」，之后没网也能打开最近一次同步的看板。',
+    pairToken: '访问令牌', pairRegen: '重新生成',
+    pairNote: '令牌只显示在这台电脑上：安装页和二维码里都不会泄露；关闭局域网访问后，手机端立即失效。',
+    pairLocalOnly: '手机配对只在电脑端（localhost）可见 —— 当前页面来自局域网，出于隐私考虑不显示令牌。',
+    offlineBar: '⚠️ 离线模式 · 显示的是最近一次缓存的数据（联网后自动更新）',
+    staleBar: '📦 当前显示缓存数据 · 点此刷新', refresh: '刷新',
+    pairNeededTitle: '🔒 需要配对', pairNeededBody: '这台设备还没有访问令牌。请在电脑上打开看板 →「设置 → 手机配对」，用手机扫描二维码即可。'
   },
   en: {
     appTitle: 'Canvas Course Hub', loading: 'Loading…',
@@ -293,7 +378,20 @@ var I18N = {
     footer: 'Local service ', footerTail: ' · data from Canvas API',
     demoBanner: '📦 Demo data · run "node cli.mjs demo --off" to exit',
     empty: '—', toggleLang: '中', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    assignTitle: 'Assignments (', closeParen: ')', ptsSuffix: ' pts'
+    assignTitle: 'Assignments (', closeParen: ')', ptsSuffix: ' pts',
+    pairTitle: '📱 Phone pairing (offline dashboard)', lanToggle: 'LAN access',
+    lanOn: '✅ On', lanOff: '⭕ Off', lanWorking: 'Working…', lanFail: '❌ Failed to start: ',
+    copy: 'Copy', copied: '✅ Copied',
+    pairStep1: '① Scan this first to install the root certificate', pairStep2: '② Then scan this to open the dashboard',
+    pairTip1: 'iPhone: Settings → Profile Downloaded → Install, then General → About → Certificate Trust Settings → enable full trust.',
+    pairTip2: 'Android: Settings → Security → Encryption & credentials → Install a certificate → CA certificate.',
+    pairTip3: 'In the dashboard, use the browser menu "Add to Home screen / Install app"; the last synced dashboard then works offline.',
+    pairToken: 'Access token', pairRegen: 'Regenerate',
+    pairNote: 'The token is only shown on this computer — never on the install page or in any QR code. Turning LAN access off disconnects phones immediately.',
+    pairLocalOnly: 'Phone pairing is only available on localhost — this page came over the LAN, so the token is hidden for privacy.',
+    offlineBar: '⚠️ Offline · showing the last cached data (updates automatically when back online)',
+    staleBar: '📦 Showing cached data · tap to refresh', refresh: 'Refresh',
+    pairNeededTitle: '🔒 Pairing required', pairNeededBody: 'This device has no access token yet. Open the dashboard on your computer → Settings → Phone pairing, then scan the QR code with your phone.'
   }
 };
 var LANG = localStorage.getItem('ch-lang') || 'zh';
@@ -701,21 +799,52 @@ function renderCalList() {
   });
 }
 function renderCalTab() { if (!DATA) return; renderCalendar(); renderHeatmap(); renderCalList(); }
-function loadState() {
-  fetch('/api/state').then(function (r) { return r.json(); }).then(function (d) {
+var IS_OFFLINE = null;
+function setOffline(on) {
+  if (on === IS_OFFLINE) return;
+  IS_OFFLINE = on;
+  var bar = document.getElementById('offlineBar');
+  if (on) { bar.style.display = ''; bar.textContent = t('offlineBar'); }
+  else { bar.style.display = 'none'; if (DATA) loadState(true); }
+}
+// navigator.onLine 在部分环境下不可靠，改用「能否连上本地服务」判定
+function checkConnectivity() {
+  var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 4000);
+  fetch('/api/health?_=' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+    .then(function (r) { clearTimeout(timer); setOffline(!r.ok); })
+    .catch(function () { clearTimeout(timer); setOffline(true); });
+}
+// fresh=true 走网络优先（绕过 Service Worker 的陈旧缓存），用于刷新和恢复联网时
+function loadState(fresh) {
+  return fetch('/api/state' + (fresh ? '?fresh=1' : '')).then(function (r) {
+    if (r.status === 401) { showPairNeeded(true); return null; }
+    var stale = r.headers.get('X-Canvas-Hub-Cache') === 'stale';
+    return r.json().then(function (d) { return { d: d, stale: stale }; });
+  }).then(function (res) {
+    if (!res) return;
+    showPairNeeded(false);
+    var d = res.d;
     DATA = d;
     if (!localStorage.getItem('ch-lang') && d.lang) LANG = d.lang;
     var banner = document.getElementById('banner');
-    if (d.demo) { banner.style.display = ''; banner.textContent = t('demoBanner'); } else { banner.style.display = 'none'; }
+    if (d.demo) { banner.style.display = ''; banner.classList.remove('offline'); banner.textContent = t('demoBanner'); }
+    else if (res.stale) { banner.style.display = ''; banner.classList.add('offline'); banner.textContent = t('staleBar'); }
+    else { banner.style.display = 'none'; banner.classList.remove('offline'); }
     applyLang(LANG);
   }).catch(function (e) { document.getElementById('sub').textContent = t('loadFailed') + e; });
+}
+function showPairNeeded(on) {
+  var box = document.getElementById('pairNeeded');
+  box.style.display = on ? '' : 'none';
+  if (on) document.getElementById('pairNeededHint').textContent = location.origin;
 }
 function showTab(name) {
   document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === name); });
   ['dash', 'cal', 'chat', 'set'].forEach(function (x) {
     document.getElementById('tab-' + x).style.display = x === name ? '' : 'none';
   });
-  if (name === 'set') loadSettings();
+  if (name === 'set') { loadSettings(); loadPair(); }
   if (name === 'cal') renderCalTab();
 }
 function addMsg(role, html) {
@@ -788,7 +917,7 @@ function loadSettings() {
     var link = document.getElementById('baseLink');
     if (d.baseUrl) { link.href = d.baseUrl; link.textContent = t('openBase'); }
     else { link.textContent = t('noBase'); link.removeAttribute('href'); }
-  });
+  }).catch(function () { /* 离线时接口不可用，静默忽略 */ });
 }
 function saveSettings() {
   var body = {
@@ -820,6 +949,97 @@ function doRun(cmd) {
     })
     .catch(function (e) { st.textContent = t('reqFailed') + e; });
 }
+// ---------- 手机配对 ----------
+var PAIR = null;
+function loadPair() {
+  return fetch('/api/pair').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    var body = document.getElementById('pairBody');
+    var hidden = document.getElementById('pairHidden');
+    var btn = document.getElementById('lanBtn');
+    var st = document.getElementById('lanState');
+    if (!d || !d.ok) {
+      body.style.display = 'none';
+      hidden.style.display = '';
+      btn.style.display = 'none';
+      st.textContent = '';
+      return;
+    }
+    hidden.style.display = 'none';
+    btn.style.display = '';
+    btn.textContent = d.enabled ? t('lanOn') : t('lanOff');
+    st.textContent = '';
+    PAIR = d;
+    if (!d.enabled) { body.style.display = 'none'; return; }
+    body.style.display = '';
+    document.getElementById('qrPair').innerHTML = d.qr || '';
+    document.getElementById('qrHelper').innerHTML = d.qrHelper || '';
+    document.getElementById('pairUrl').textContent = d.pairUrl || '';
+    document.getElementById('helperUrl').textContent = d.helperUrl || '';
+    document.getElementById('pairToken').textContent = d.token || '';
+  }).catch(function () {
+    document.getElementById('pairBody').style.display = 'none';
+    document.getElementById('pairHidden').style.display = '';
+  });
+}
+function toggleLan() {
+  var on = PAIR ? !PAIR.enabled : true;
+  var st = document.getElementById('lanState');
+  st.textContent = t('lanWorking');
+  fetch('/api/lan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: on }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.ok) { st.textContent = t('lanFail') + (d.error || ''); return; }
+      st.textContent = '';
+      loadPair();
+    })
+    .catch(function (e) { st.textContent = t('reqFailed') + e; });
+}
+function regenToken() {
+  fetch('/api/lan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ regenerateToken: true }) })
+    .then(function (r) { return r.json(); }).then(function () { loadPair(); });
+}
+function copyText(id) {
+  var node = document.getElementById(id);
+  var txt = node.textContent || '';
+  var flash = function () {
+    var old = node.textContent;
+    node.textContent = t('copied');
+    setTimeout(function () { node.textContent = old; }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(flash, function () { legacyCopy(txt, flash); });
+  } else legacyCopy(txt, flash);
+}
+function legacyCopy(txt, done) {
+  var ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) {}
+  document.body.removeChild(ta);
+}
+document.getElementById('banner').addEventListener('click', function () {
+  if (this.classList.contains('offline')) loadState(true);
+});
+
+// ---------- 离线看板（PWA）----------
+window.addEventListener('online', function () { checkConnectivity(); });
+window.addEventListener('offline', function () { setOffline(true); });
+if (!navigator.onLine) setOffline(true);
+setTimeout(checkConnectivity, 900);
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('/sw.js').catch(function () {});
+  var swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (swReloaded) return;
+    swReloaded = true;
+    location.reload();
+  });
+}
+
 // 支持深链：?tab=dash|cal|chat|set、?theme=light|dark（也方便截图）
 var URL_PARAMS = new URLSearchParams(location.search);
 var BOOT_THEME = URL_PARAMS.get('theme');
