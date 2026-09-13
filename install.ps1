@@ -1,4 +1,4 @@
-﻿# Canvas 课程管家 · Windows 安装向导
+# Canvas 课程管家 · Windows 安装向导
 #  交互式：   powershell -ExecutionPolicy Bypass -File install.ps1
 #  无人值守： $env:NONINTERACTIVE='1'; $env:CANVAS_TOKEN='xxx'; powershell -ExecutionPolicy Bypass -File install.ps1
 #
@@ -6,7 +6,7 @@
 #                   ENABLE_WEB / ENABLE_SCHEDULE / ENABLE_LARK / MORNING / EVENING / ENABLE_DEMO / WEB_LANG
 
 $ErrorActionPreference = 'Stop'
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $NonInteractive = ($env:NONINTERACTIVE -eq '1')
 
 function Ok($m) { Write-Host "✅ $m" -ForegroundColor Green }
@@ -129,6 +129,7 @@ if ($DeepSeekKey) { Ok 'DeepSeek Key 已记录' } else { Warn2 '未填 DeepSeek 
 Write-Host ''
 
 # ---------- 5. 功能开关 ----------
+$EnableNotify = if ($env:ENABLE_MACOS) { $env:ENABLE_MACOS } else { if (AskYesNo '启用 Windows 系统通知（截止提醒与每日摘要，推荐）' 'Y') { '1' } else { '0' } }
 $EnableWeb = if ($env:ENABLE_WEB) { $env:ENABLE_WEB } else { if (AskYesNo '启用 Web 看板（含日历、对话、设置，默认 8788 端口）' 'Y') { '1' } else { '0' } }
 $EnableSchedule = if ($env:ENABLE_SCHEDULE) { $env:ENABLE_SCHEDULE } else { if (AskYesNo '启用计划任务（每天自动同步 + 截止提醒）' 'Y') { '1' } else { '0' } }
 $Morning = if ($env:MORNING) { $env:MORNING } else { if ($EnableSchedule -eq '1') { Ask '每天几点同步' '08:00' } else { '08:00' } }
@@ -161,7 +162,7 @@ if ($EnableLark -eq '1') {
 }
 
 $Port = if ($env:PORT) { $env:PORT } else { '8788' }
-$MacFlag = '0'
+$MacFlag = if ($EnableNotify -eq '1') { '1' } else { '0' }
 $LarkFlag = if ($EnableLark -eq '1') { '1' } else { '0' }
 $Exclude = ''
 if ($CanvasUrl -match 'cityu') { $Exclude = 'SD_ANTI_DECEPTION,SD_CASH' }

@@ -12,7 +12,7 @@ try { prev = JSON.parse(fs.readFileSync(cfgPath, 'utf8')) || {}; } catch {}
 const cfg = {
   canvas: { baseUrl: e.CANVAS_URL || 'https://canvas.cityu.edu.hk', tokenFile: 'secrets.json', timeoutMs: 30000 },
   lark: {},
-  channels: { macos: e.MACOS === '1', larkIM: larkOn, larkBase: larkOn, larkCalendar: larkOn, dashboard: true },
+  channels: { desktop: e.MACOS === '1', macos: e.MACOS === '1', larkIM: larkOn, larkBase: larkOn, larkCalendar: larkOn, dashboard: true },
   web: { port: Number(e.PORT || 8788), lang: e.WEB_LANG === 'en' ? 'en' : 'zh' },
   download: { root: e.FILES_DIR || path.join(process.env.HOME || '', 'Desktop', 'CityU 课程'), maxFileSizeMB: 300, addWeekPrefix: false },
   courses: { include: [], exclude: e.CANVAS_EXCLUDE ? e.CANVAS_EXCLUDE.split(',') : [], names: {} },

@@ -11,6 +11,14 @@ function readState() {
 function macosNotify(title, body) {
   desktopNotify(title, body);
 }
+
+// 桌面通知开关：新配置用 channels.desktop，旧配置沿用 channels.macos
+function desktopEnabled(cfg) {
+  const ch = cfg.channels || {};
+  if (ch.desktop === false) return false;
+  if (ch.desktop === true) return true;
+  return ch.macos !== false;
+}
 function hkDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date());
 }
@@ -61,7 +69,7 @@ export async function notify() {
   lines.push('📁 ' + Object.keys(s.courses).length + ' 门课 · ' + totalFiles + ' 个文件 · 仪表盘已更新');
   const md = lines.join('\n');
 
-  if (cfg.channels?.macos !== false) macosNotify('Canvas 课程管家', '摘要已生成：7 天内截止 ' + dues.length + ' 项，新文件 ' + newFiles.length + ' 个');
+  if (desktopEnabled(cfg)) macosNotify('Canvas 课程管家', '摘要已生成：7 天内截止 ' + dues.length + ' 项，新文件 ' + newFiles.length + ' 个');
   if (cfg.channels?.larkIM !== false) {
     const openId = larkUserOpenId();
     if (!openId) log('⏭️ 飞书推送跳过：config.lark.userOpenId 未配置（可运行 node cli.mjs lark-setup）');
@@ -87,7 +95,7 @@ export async function eveningNotify() {
   if (!dues.length) { log('🌙 晚间检查：明后天没有未交的截止，不打扰。'); return; }
   dues.sort((a, b) => a.due.localeCompare(b.due));
   const md = '🌙 **Canvas 晚间截止提醒**\n\n' + dues.map((d) => '- ❗ [' + d.course + '] ' + d.name + ' — ' + hkTime(d.due)).join('\n');
-  if (cfg.channels?.macos !== false) macosNotify('Canvas 截止提醒', '明天截止：' + dues.map((d) => d.name).join('、'));
+  if (desktopEnabled(cfg)) macosNotify('Canvas 截止提醒', '明天截止：' + dues.map((d) => d.name).join('、'));
   if (cfg.channels?.larkIM !== false) {
     const openId = larkUserOpenId();
     if (!openId) log('⏭️ 飞书晚间提醒跳过：config.lark.userOpenId 未配置');
