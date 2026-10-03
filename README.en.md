@@ -26,6 +26,7 @@
 - **Reminders** — daily sync at 08:00 and deadline check at 20:00 (missed runs catch up on wake), daily digest plus a Sunday weekly report, delivered through native notifications, Feishu messages and Feishu calendar events
 - **AI assistant** — ask "which course is most at risk?", "update my data", or "set the final exam weight to 55%"; it calls tools and streams the answer
 - **Phone dashboard (PWA)** — open the dashboard on your phone, add it to your home screen, and **keep reading it offline**: a Service Worker caches the app shell plus the latest state, so the next deadline is available on the subway. LAN traffic goes over a local self-signed HTTPS cert with a one-time access token that is only ever shown on your computer
+- **High-frequency watch (pop quizzes)** — define rules by course plus weekdays/hours (or a date range); inside that window Canvas is polled much more often (60s–30min). Anything new — a freshly published assignment/quiz, or **a due date appearing or changing** — fires a strong alert: desktop notification with sound plus a Feishu push, repeated every few minutes until you acknowledge it
 - **Bilingual UI** (Chinese / English), dark mode, mobile-friendly
 - **Zero dependencies** — plain Node.js built-ins, no `npm install`
 
@@ -157,6 +158,34 @@ Change them in `config.json` if they clash:
 
 > Phones only accept `https://<lan-ip>:<lanPort>`; after changing ports, re-pair by scanning the QR code in the desktop dashboard. `node cli.mjs doctor` reports the status of all three ports and the certificate.
 
+## ⏱ High-frequency watch (pop quizzes)
+
+The 08:00 / 20:00 scheduled sync will never catch a quiz a lecturer opens ten minutes before class. That is what this is for: **inside a window you define, Canvas is polled much more often, and anything new triggers a strong alert**.
+
+**Setup** (dashboard → Settings → High-frequency watch):
+
+1. "+ New rule"; 2. name it (e.g. `6018 pop quiz`); 3. tick the courses (none = all courses)
+4. tick weekdays (none = every day), set hours (blank = all day) and optionally a date range (e.g. only this week)
+5. pick the scan interval (3 minutes by default) and repeat policy, tick the alert channels; 6. save — while a rule is live the dashboard shows 🟢 Watching
+
+**What counts as a hit**
+
+| Case | Detail |
+| --- | --- |
+| New assignment / quiz | An item that was not there before (the first scan only builds a baseline, so it never floods you) |
+| Due date changed | Goes from "no due date" to having one, or the date moves — the classic pop-quiz signal |
+| New announcement | The lecturer notifies the class by announcement (can be switched off per rule) |
+
+**How alerts are delivered**: a desktop notification (with sound on macOS, native toast on Windows) and a Feishu push (which reaches your phone). Both are toggleable per rule. If a hit stays unacknowledged it is **repeated** on your schedule (5 minutes apart, twice by default) until you press "Got it" in the dashboard.
+
+**Kind to Canvas**: requests only happen inside the window (2–3 light calls per course, once every 3 minutes by default) — **zero requests outside it**. The minimum interval is 1 minute, and hit detection is pure local diffing, so it costs no DeepSeek budget.
+
+| Hit banner on the dashboard | Rule list and editor | On a phone |
+| --- | --- | --- |
+| ![Watch hits](docs/screenshots/watch-dashboard.png) | ![Watch rules](docs/screenshots/watch-settings.png) | ![Watch on phone](docs/screenshots/watch-phone.png) |
+
+There is a CLI too: `node cli.mjs watch` scans once immediately (`--force` ignores the window), `node cli.mjs watch --status` just prints the rules.
+
 ## ⚙️ Optional
 
 ### Demo mode (no Canvas token needed)
@@ -189,6 +218,7 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
 | `node cli.mjs due 10` | Deadlines within 10 days |
 | `node cli.mjs demo [--off]` | Demo data on / off |
 | `node cli.mjs server` | Run the dashboard in the foreground |
+| `node cli.mjs watch [--status]` | High-frequency watch: scan now / print rule status |
 
 ## ❓ FAQ
 
@@ -212,6 +242,15 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
 **Scheduled job did not run?** Run `node cli.mjs doctor` and check `logs/`. On Windows, open Task Scheduler and run the CanvasHub-* task manually.
 
 **My materials live elsewhere.** Point `download.root` in `config.json` at your existing folder; identical files are detected and not re-downloaded.
+
+**Will watching hammer Canvas or hit rate limits?**
+No. Requests only happen inside the rule window — **zero outside it** — and each course costs 2–3 light calls per round with a 1-minute floor (3 minutes by default). Hit detection is pure local diffing, so it spends no DeepSeek budget.
+
+**I set up a watch but get no alerts.**
+Check three things in order: (1) does the dashboard show 🟢 **Watching** (nothing is scanned outside the window); (2) are the alert channels ticked in the rule (desktop / sound / Feishu); (3) run `node cli.mjs watch --status` to see whether "last scan" keeps updating and whether there are errors. Feishu pushes also need an authorised `lark.userOpenId` (`node cli.mjs doctor` checks it).
+
+**Does the watch need my computer to stay on?**
+Yes — the scanner lives in the web service process, so the machine must be awake with the service running (sleeping laptops do not scan; they catch up immediately on wake). That is also what makes the Feishu push able to reach your phone at any time.
 
 **How do I uninstall?** `bash uninstall.sh` (macOS/Linux) or `powershell -ExecutionPolicy Bypass -File uninstall.ps1` (Windows) — background jobs are removed, your course files are untouched.
 

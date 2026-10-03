@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { ROOT, loadConfig, log } from './util.mjs';
 import { larkStatus, larkEnabled, larkBin } from './larkrun.mjs';
 import { lanHosts } from './lan.mjs';
+import { watchStatus } from './watch.mjs';
 
 function readSettings() {
   try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'settings.json'), 'utf8')) || {}; } catch { return {}; }
@@ -91,6 +92,18 @@ export async function doctor() {
     else warn('手机端 HTTPS 端口 ' + lanPort + ' 未响应', '重启 Web 服务；若仍失败，检查该端口是否被占用');
     if (certOk) ok('自签证书就绪，手机首次使用先装 CA：http://' + lanIps[0] + ':' + helperPort + '/');
     else warn('自签证书尚未生成', 'Web 服务启动时会自动生成');
+  }
+
+  // 高频盯防
+  const wst = watchStatus();
+  if (wst.total) {
+    const bits = [wst.total + ' 条规则', '当前生效 ' + wst.active];
+    if (wst.lastScanAt) bits.push('上次扫描 ' + hkTime(new Date(wst.lastScanAt).toISOString()));
+    if (wst.pending.length) bits.push('⏳ ' + wst.pending.length + ' 项待确认');
+    if (wst.lastError) bits.push('⚠️ ' + String(wst.lastError).slice(0, 60));
+    ok('高频盯防：' + bits.join(' · '));
+  } else {
+    ok('高频盯防未配置（可选：网页「设置 → 高频盯防」按课程 / 时段加规则，抓随堂 quiz）');
   }
 
   // 后台任务：交给跨平台调度层报告（macOS=launchd / Windows=计划任务 / Linux=crontab）

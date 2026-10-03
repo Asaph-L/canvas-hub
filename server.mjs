@@ -10,6 +10,7 @@ import { ensureCertificate, describeCertificate } from './src/cert.mjs';
 import { lanHosts, localHostnames, isAllowedHost, ensureToken, regenerateToken, tokenMatches, tokenFromRequest, isLoopback, isLocalNetwork, pemToDer, mobileConfig, helperPage, generatePairCode, pairCodeMatches, certFingerprint } from './src/lan.mjs';
 import { qrSvg } from './src/qr.mjs';
 import { iconFor, MANIFEST } from './src/icons.mjs';
+import { watchTick, watchStatus, loadDoc, saveDoc, normalizeRule } from './src/watch.mjs';
 
 // 配置读取辅助函数必须定义在最前面：下面的 PORT 常量就依赖它（曾因定义顺序在不同平台上表现不一致）
 const readJSON = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
@@ -597,7 +598,78 @@ async function handle(req, res, ctx) {
       return sendJSON(res, 200, { ok: true, enabled: lanEnabled(), ...urls });
     }
 
-    if (p === '/api/state') return sendJSON(res, 200, { ...buildStatePayload(), local: loopback, version: VERSION });
+    if (p === '/api/state') {
+      const ws = watchStatus();
+      return sendJSON(res, 200, {
+        ...buildStatePayload(),
+        local: loopback,
+        version: VERSION,
+        watch: {
+          enabled: ws.enabled,
+          total: ws.total,
+          active: ws.active,
+          lastScanAt: ws.lastScanAt,
+          lastError: ws.lastError,
+          pending: ws.pending.slice(0, 5),
+          pendingCount: ws.pending.length,
+          hits: ws.hits.slice(0, 8),
+          rules: ws.rules.map((r) => ({
+            id: r.id, label: r.label, active: r.active, enabled: r.enabled !== false,
+            courses: r.courses, days: r.days, start: r.start, end: r.end, from: r.from, to: r.to,
+            intervalSec: r.intervalSec, repeatMinutes: r.repeatMinutes, maxRepeats: r.maxRepeats,
+            includeAnnouncements: r.includeAnnouncements, alerts: r.alerts,
+            lastScanAt: r.lastScanAt, lastHitAt: r.lastHitAt, hitCount: r.hitCount,
+          })),
+        },
+      });
+    }
+    if (p === '/api/watches' && req.method === 'GET') {
+      return sendJSON(res, 200, { ok: true, ...watchStatus() });
+    }
+    if (p === '/api/watches' && req.method === 'POST') {
+      const b = await readBody(req);
+      const doc = loadDoc();
+      const act = String(b.action || 'save');
+      if (act === 'save') {
+        const rule = normalizeRule(b.rule || {});
+        if (doc.rules.length >= 20 && !doc.rules.some((r) => r.id === rule.id)) {
+          return sendJSON(res, 400, { ok: false, error: '最多 20 条盯防规则' });
+        }
+        const i = doc.rules.findIndex((r) => r.id === rule.id);
+        if (i >= 0) doc.rules[i] = { ...rule, lastScanAt: doc.rules[i].lastScanAt, hitCount: doc.rules[i].hitCount };
+        else doc.rules.push(rule);
+        saveDoc(doc);
+        return sendJSON(res, 200, { ok: true, rule, ...watchStatus() });
+      }
+      if (act === 'delete') {
+        doc.rules = doc.rules.filter((r) => r.id !== b.id);
+        saveDoc(doc);
+        return sendJSON(res, 200, { ok: true, ...watchStatus() });
+      }
+      if (act === 'toggle') {
+        if (b.id) {
+          const r = doc.rules.find((x) => x.id === b.id);
+          if (!r) return sendJSON(res, 404, { ok: false, error: '规则不存在' });
+          r.enabled = b.enabled !== false;
+        } else {
+          doc.enabled = b.enabled !== false;
+        }
+        saveDoc(doc);
+        return sendJSON(res, 200, { ok: true, ...watchStatus() });
+      }
+      if (act === 'ack') {
+        for (const pin of doc.pending) {
+          if (b.all || pin.id === b.id) pin.acked = true;
+        }
+        saveDoc(doc);
+        return sendJSON(res, 200, { ok: true, ...watchStatus() });
+      }
+      if (act === 'scan-now') {
+        const r = await watchTick({ logFn: (m) => console.log('[盯防] ' + m) });
+        return sendJSON(res, 200, { ok: r.ok !== false, error: r.error || null, scanned: r.scanned || 0, hits: (r.hits || []).length, ...watchStatus() });
+      }
+      return sendJSON(res, 400, { ok: false, error: '未知操作：' + act });
+    }
     if (p === '/api/status') return sendJSON(res, 200, { ok: true, text: latestSyncLogTail() });
     if (p === '/api/settings' && req.method === 'GET') {
       const s = loadSettings();
@@ -734,14 +806,32 @@ function stopLanServers() {
 
 localServer.listen(PORT, HOST, () => {
   console.log('Canvas 课程管家 Web 已启动：http://' + HOST + ':' + PORT);
+  const ws = watchStatus();
+  if (ws.total) console.log('高频盯防：' + ws.total + ' 条规则，当前生效 ' + ws.active + ' 条' + (ws.lastScanAt ? '，上次扫描 ' + new Date(ws.lastScanAt).toLocaleTimeString('zh-HK', { timeZone: 'Asia/Hong_Kong' }) : ''));
   if (!lanEnabled()) {
     console.log('手机端（局域网）访问已关闭：可在看板「设置 → 手机配对」中开启。');
-    return;
+  } else {
+    startLanServers().then((r) => {
+      if (!r.ok) console.error('手机端访问未启动：' + r.error + '（桌面看板不受影响）');
+    });
   }
-  startLanServers().then((r) => {
-    if (!r.ok) console.error('手机端访问未启动：' + r.error + '（桌面看板不受影响）');
-  });
 });
+
+// ---------- 高频盯防循环 ----------
+// 跑在常驻的 Web 服务进程里：跨平台，不需要额外的系统计划任务。
+// 不在任何盯防窗口内时 watchTick 会立刻返回，零 Canvas API 调用。
+let watchBusy = false;
+setInterval(async () => {
+  if (watchBusy) return;
+  watchBusy = true;
+  try {
+    await watchTick({ logFn: (m) => console.log('[盯防] ' + m) });
+  } catch (e) {
+    console.error('[盯防] 扫描异常：' + ((e && e.message) || e));
+  } finally {
+    watchBusy = false;
+  }
+}, 20000);
 
 function describeCert(pem) {
   try {

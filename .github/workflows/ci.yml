@@ -52,6 +52,10 @@ jobs:
         shell: bash
         run: node scripts/selftest-pdf.mjs
 
+      - name: High-frequency watch self-test (windows, diffing, alerts)
+        shell: bash
+        run: node scripts/selftest-watch.mjs
+
       - name: End-to-end smoke (demo data, report, dashboard)
         shell: bash
         run: |

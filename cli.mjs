@@ -13,6 +13,7 @@ import { doctor } from './src/doctor.mjs';
 import { larkInit } from './src/larkinit.mjs';
 import { larkSetup } from './src/larksetup.mjs';
 import { demo } from './src/demo.mjs';
+import { watchCommand } from './src/watch.mjs';
 
 const cmd = process.argv[2] || 'help';
 const force = process.argv.includes('--force');
@@ -34,6 +35,7 @@ const cmds = {
   analyze: () => analyzeSyllabi({ force }),
   classify: () => smartClassify({ scope: all ? 'all' : 'other' }),
   doctor: () => doctor(),
+  watch: () => watchCommand({ statusOnly: process.argv.includes('--status'), force }),
   demo: () => demo({ off: process.argv.includes('--off') }),
   'lark-init': () => larkInit({ dryRun }),
   'lark-setup': () => larkSetup({ noWait, finishCode }),
@@ -61,5 +63,6 @@ else {
   console.log('  node cli.mjs lark-init [--dry-run]   # 创建飞书 Base 与 4 张表');
   console.log('  node cli.mjs lark-setup [--no-wait]  # 引导完成飞书授权');
   console.log('  node cli.mjs server              # 前台启动 Web 看板（默认 8788）');
+  console.log('  node cli.mjs watch [--status]    # 高频盯防：立刻扫一次 / 只看规则状态');
   console.log('  node cli.mjs demo [--off]        # 生成/退出演示数据（无需 Canvas Token）');
 }

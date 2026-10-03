@@ -15,14 +15,25 @@ export function openPath(target) {
   } catch {}
 }
 
-// 跨平台桌面通知
-export function desktopNotify(title, body) {
+// 强提醒用的提示音（best-effort，失败静默）
+export function playAlertSound() {
+  try {
+    if (IS_MAC) spawnSync('afplay', ['/System/Library/Sounds/Glass.aiff'], { timeout: 8000, stdio: 'ignore' });
+    else if (IS_WIN) spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', '[console]::beep(880,300); [console]::beep(1180,300)'], { timeout: 8000, stdio: 'ignore' });
+    else spawnSync('paplay', ['/usr/share/sounds/freedesktop/stereo/bell.oga'], { timeout: 5000, stdio: 'ignore' });
+  } catch {}
+}
+
+// 跨平台桌面通知；opts.sound=true 时同时出声（盯防强提醒用）
+export function desktopNotify(title, body, opts) {
   const t = String(title || '').slice(0, 120);
   const b = String(body || '').replace(/\n/g, ' ').slice(0, 180);
+  const sound = !!(opts && opts.sound);
   try {
     if (IS_MAC) {
       const esc = (s) => s.replace(/"/g, "'");
-      spawnSync('osascript', ['-e', 'display notification "' + esc(b) + '" with title "' + esc(t) + '"'], { timeout: 15000 });
+      const cmd = 'display notification "' + esc(b) + '" with title "' + esc(t) + '"' + (sound ? ' sound name "Glass"' : '');
+      spawnSync('osascript', ['-e', cmd], { timeout: 15000, stdio: 'ignore' });
       return true;
     }
     if (IS_WIN) {
@@ -39,7 +50,8 @@ export function desktopNotify(title, body) {
       spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 20000 });
       return true;
     }
-    spawnSync('notify-send', [t, b], { timeout: 10000 });
+    spawnSync('notify-send', [t, b], { timeout: 10000, stdio: 'ignore' });
+    if (sound) playAlertSound();
     return true;
   } catch { return false; }
 }

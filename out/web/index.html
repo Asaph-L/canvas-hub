@@ -153,6 +153,26 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
   .pair-grid { grid-template-columns:1fr; }
   .qr-box svg { width:180px; height:180px; }
 }
+/* ---- 高频盯防 ---- */
+.watchhits { border:1.5px solid var(--bad-ink); }
+.watchhits h2 { color:var(--bad-ink); }
+.watchhit { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:9px 0; border-bottom:1px solid var(--line); }
+.watchhit:last-child { border-bottom:none; }
+.watchhit .t { font-weight:600; }
+.watchstrip { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12.5px; color:var(--sub); margin:6px 0 2px; }
+.watchdot { width:9px; height:9px; border-radius:50%; background:var(--line); display:inline-block; }
+.watchdot.on { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.18); }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chipsel { cursor:pointer; border:1px solid var(--line); background:var(--cat-bg); color:var(--ink); border-radius:999px; padding:5px 12px; font-size:12.5px; }
+.chipsel.on { background:var(--badge-bg); color:var(--badge-ink); border-color:var(--acc); font-weight:600; }
+.we-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:10px 0; }
+.we-grid label { display:block; font-size:12.5px; color:var(--sub); margin-bottom:4px; }
+.we-grid input, .we-grid select { width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; font-size:13px; }
+.watchrule { display:flex; gap:10px; align-items:flex-start; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.watchrule:last-child { border-bottom:none; }
+.watchrule .meta { font-size:12px; color:var(--sub); margin-top:3px; }
+.watchrule .ops { display:flex; gap:6px; flex-wrap:wrap; }
+.watchrule .ops button { font-size:12px; padding:5px 10px; }
 /* ---- 离线看板（PWA）---- */
 .offlinebar { background:var(--warn-bg); color:var(--warn-ink); border-bottom:1px solid var(--line); padding:8px 20px; font-size:13px; text-align:center; }
 .banner.offline { background:var(--warn-bg); color:var(--warn-ink); }
@@ -207,6 +227,8 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
     <p class="hint" id="pairNeededHint"></p>
   </div>
   <section id="tab-dash">
+    <div id="watchHits"></div>
+    <div class="watchstrip" id="watchStrip"></div>
     <div class="pills" id="pills"></div>
     <div id="naSec"></div>
     <div id="dueSec"></div>
@@ -316,6 +338,42 @@ footer { text-align:center; color:var(--sub); font-size:12px; padding:20px; }
       </div>
       <div id="pairHidden" class="hint" style="display:none" data-i18n="pairLocalOnly">手机配对只在电脑端（localhost）可见 —— 当前页面来自局域网，出于隐私考虑不显示令牌。</div>
     </div>
+    <div class="card" id="watchCard">
+      <h2 class="first" data-i18n="watchTitle">⏱ 高频盯防（随堂 quiz）</h2>
+      <p class="hint" data-i18n="watchIntro">有些课会突然放出很短的随堂测验，每天两次的定时同步抓不到。加一条盯防规则：在指定星期 / 时段内用更高频率扫 Canvas，一有动静就强提醒（桌面通知带提示音 + 飞书推送，可重复提醒直到你确认）。</p>
+      <div class="set-row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn" onclick="watchNewRule()" data-i18n="watchAdd">＋ 新建规则</button>
+        <button class="btn ghost" onclick="watchScanNow()" data-i18n="watchScanNow">立刻扫一次</button>
+        <span class="hint" id="watchMsg"></span>
+      </div>
+      <div id="watchList"></div>
+      <div id="watchEditor" style="display:none;border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
+        <div class="we-grid">
+          <div><label data-i18n="watchLabel">规则名称</label><input id="weLabel" maxlength="60" placeholder="例如：6018 随堂 quiz"></div>
+          <div><label data-i18n="watchTime">时段（留空 = 全天）</label><input id="weStart" type="time"><input id="weEnd" type="time" style="margin-top:6px"></div>
+          <div><label data-i18n="watchDates">日期区间（留空 = 长期）</label><input id="weFrom" type="date"><input id="weTo" type="date" style="margin-top:6px"></div>
+          <div><label data-i18n="watchInterval">扫描间隔</label><select id="weInterval"></select></div>
+          <div><label data-i18n="watchRepeat">重复提醒间隔</label><select id="weRepeat"></select></div>
+          <div><label data-i18n="watchRepeatTimes">最多重复次数</label><select id="weMaxRepeat"></select></div>
+        </div>
+        <label style="display:block;font-size:12.5px;color:var(--sub);margin:6px 0 4px" data-i18n="watchCourses">盯哪些课（不选 = 全部课程）</label>
+        <div class="chips" id="weCourses"></div>
+        <label style="display:block;font-size:12.5px;color:var(--sub);margin:12px 0 4px" data-i18n="watchDays">星期（不选 = 每天）</label>
+        <div class="chips" id="weDays"></div>
+        <div class="chips" style="margin-top:12px">
+          <button class="chipsel" id="weDesktop" onclick="weToggle(this)" data-i18n="watchAlertDesktop">桌面通知</button>
+          <button class="chipsel" id="weSound" onclick="weToggle(this)" data-i18n="watchAlertSound">提示音</button>
+          <button class="chipsel" id="weLark" onclick="weToggle(this)" data-i18n="watchAlertLark">飞书推送</button>
+          <button class="chipsel" id="weAnn" onclick="weToggle(this)" data-i18n="watchAnnouncements">也盯公告</button>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn" onclick="watchSave()" data-i18n="save">保存规则</button>
+          <button class="btn ghost" onclick="watchCancel()" data-i18n="watchCancel">取消</button>
+          <button class="btn ghost" id="weDelete" onclick="watchDeleteEditing()" data-i18n="watchDelete">删除</button>
+        </div>
+        <p class="hint" data-i18n="watchHint">提示：扫描只在窗口内进行，窗口外零请求；间隔不要小于 1 分钟，避免被 Canvas 限流。</p>
+      </div>
+    </div>
     <div class="card">
       <h2 class="first" data-i18n="feishuTitle">飞书入口</h2>
       <p class="hint"><span data-i18n="feishuBase">Base 看板：</span><a id="baseLink" href="#" target="_blank"></a></p>
@@ -384,6 +442,25 @@ var I18N = {
     pairCodeNote: '手机不想扫码时：打开看板地址（下方「固定地址」），在配对页输入这 6 位数字即可，10 分钟内有效、用一次即废。',
     pairFixed: '固定地址', pairFp: '证书指纹',
     pairFpNote: '装完证书后，可在手机系统设置里核对这个 SHA-256 指纹，一致才说明证书没被替换。',
+    watchTitle: '⏱ 高频盯防（随堂 quiz）',
+    watchIntro: '有些课会突然放出很短的随堂测验，每天两次的定时同步抓不到。加一条盯防规则：在指定星期 / 时段内用更高频率扫 Canvas，一有动静就强提醒（桌面通知带提示音 + 飞书推送，可重复提醒直到你确认）。',
+    watchAdd: '＋ 新建规则', watchScanNow: '立刻扫一次', watchCancel: '取消', watchDelete: '删除',
+    watchLabel: '规则名称', watchTime: '时段（留空 = 全天）', watchDates: '日期区间（留空 = 长期）',
+    watchInterval: '扫描间隔', watchRepeat: '重复提醒间隔', watchRepeatTimes: '最多重复次数',
+    watchCourses: '盯哪些课（不选 = 全部课程）', watchDays: '星期（不选 = 每天）',
+    watchAlertDesktop: '桌面通知', watchAlertSound: '提示音', watchAlertLark: '飞书推送', watchAnnouncements: '也盯公告',
+    watchHint: '提示：扫描只在窗口内进行，窗口外零请求；间隔不要小于 1 分钟，避免被 Canvas 限流。',
+    watchNoRules: '还没有盯防规则 —— 点「＋ 新建规则」，例如「6018，周二 09:00-12:00，每 3 分钟」。',
+    watchAllCourses: '全部课程', watchEveryDay: '每天', watchEvery: '每 ', watchMin: ' 分钟',
+    watchDayShort: ['一', '二', '三', '四', '五', '六', '日'],
+    watchActive: '盯防中', watchIdle: '待机', watchPaused: '已暂停',
+    watchEdit: '编辑', watchEnable: '启用', watchPause: '暂停', watchRemove: '删除',
+    watchLastScan: '上次扫描 ', watchNever: '尚未扫描', watchMinLeft: '分钟',
+    watchPendingTitle: '🚨 盯防命中，待确认', watchAck: '知道了', watchAckAll: '全部知道了',
+    watchHitNew: '新增', watchHitChanged: '截止变动', watchScanning: '扫描中…',
+    watchScanned: '✅ 扫描完成，命中 ', watchScanNone: '✅ 扫描完成，没有新内容',
+    watchSaved: '✅ 规则已保存', watchDeleted: '🗑 已删除',
+    watchRepeatOff: '不重复', watchTimesUnit: ' 次',
     installBarText: '📲 把看板装到手机桌面：以后点图标就能打开，没网也能看。',
     installBarIOS: '📲 iPhone 上点下方「分享」按钮 →「添加到主屏幕」，以后点桌面图标就能打开，离线也能看。',
     installBarDone: '✅ 已装到手机桌面',
@@ -447,6 +524,25 @@ var I18N = {
     pairCodeNote: 'No QR handy? Open the dashboard address (the "fixed address" below) and type these 6 digits on the pairing screen — valid for 10 minutes, single use.',
     pairFixed: 'Fixed address', pairFp: 'Cert fingerprint',
     pairFpNote: 'After installing the certificate, compare this SHA-256 fingerprint in your phone settings — they must match to rule out a swapped certificate.',
+    watchTitle: '⏱ High-frequency watch (pop quizzes)',
+    watchIntro: 'Some courses drop very short pop quizzes that the twice-daily sync never catches. Add a watch rule: inside the given weekdays / hours, Canvas is polled much more often, and anything new triggers a strong alert (desktop notification with sound + Feishu push, repeated until you acknowledge).',
+    watchAdd: '+ New rule', watchScanNow: 'Scan now', watchCancel: 'Cancel', watchDelete: 'Delete',
+    watchLabel: 'Rule name', watchTime: 'Hours (blank = all day)', watchDates: 'Date range (blank = always)',
+    watchInterval: 'Scan interval', watchRepeat: 'Repeat alert every', watchRepeatTimes: 'Max repeats',
+    watchCourses: 'Courses to watch (none = all courses)', watchDays: 'Weekdays (none = every day)',
+    watchAlertDesktop: 'Desktop notification', watchAlertSound: 'Sound', watchAlertLark: 'Feishu push', watchAnnouncements: 'Announcements too',
+    watchHint: 'Note: scanning only happens inside the window (zero requests outside); keep the interval at 1 minute or more to stay friendly to Canvas rate limits.',
+    watchNoRules: 'No watch rules yet — tap "+ New rule", e.g. "6018, Tue 09:00-12:00, every 3 minutes".',
+    watchAllCourses: 'All courses', watchEveryDay: 'Every day', watchEvery: 'every ', watchMin: ' min',
+    watchDayShort: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    watchActive: 'Watching', watchIdle: 'Idle', watchPaused: 'Paused',
+    watchEdit: 'Edit', watchEnable: 'Enable', watchPause: 'Pause', watchRemove: 'Delete',
+    watchLastScan: 'Last scan ', watchNever: 'never', watchMinLeft: 'min',
+    watchPendingTitle: '🚨 Watch hits — pending', watchAck: 'Got it', watchAckAll: 'Acknowledge all',
+    watchHitNew: 'new', watchHitChanged: 'due date changed', watchScanning: 'Scanning…',
+    watchScanned: '✅ Scan finished, hits: ', watchScanNone: '✅ Scan finished, nothing new',
+    watchSaved: '✅ Rule saved', watchDeleted: '🗑 Deleted',
+    watchRepeatOff: 'no repeat', watchTimesUnit: 'x',
     installBarText: '📲 Add the dashboard to your home screen: tap the icon from now on, and it works offline.',
     installBarIOS: '📲 On iPhone tap the Share button → "Add to Home Screen"; afterwards the icon opens it, even offline.',
     installBarDone: '✅ Added to your home screen',
@@ -494,6 +590,9 @@ function applyLang(lang) {
   document.querySelectorAll('[data-i18n-ph]').forEach(function (node) { node.placeholder = t(node.getAttribute('data-i18n-ph')); });
   document.getElementById('langBtn').textContent = t('toggleLang');
   document.getElementById('footer').textContent = t('footer') + location.host + t('footerTail');
+  renderWatchHits();
+  renderWatchStrip();
+  if (WATCH) renderWatchList();
   if (DATA) { renderDash(); renderCalTab(); }
 }
 function toggleLang() { applyLang(LANG === 'zh' ? 'en' : 'zh'); }
@@ -602,6 +701,8 @@ function courseModal(c) {
 }
 function renderDash() {
   document.getElementById('sub').textContent = t('subPrefix') + (DATA.syncedAt || '-') + t('subSuffix');
+  renderWatchHits();
+  renderWatchStrip();
   var pills = document.getElementById('pills');
   pills.innerHTML = '';
   function pill(label, node) {
@@ -903,7 +1004,7 @@ function showTab(name) {
   ['dash', 'cal', 'chat', 'set'].forEach(function (x) {
     document.getElementById('tab-' + x).style.display = x === name ? '' : 'none';
   });
-  if (name === 'set') { loadSettings(); loadPair(); }
+  if (name === 'set') { loadSettings(); loadPair(); loadWatch(); }
   if (name === 'cal') renderCalTab();
 }
 function addMsg(role, html) {
@@ -1008,6 +1109,227 @@ function doRun(cmd) {
     })
     .catch(function (e) { st.textContent = t('reqFailed') + e; });
 }
+// ---------- 高频盯防 ----------
+var WATCH = null;
+var WATCH_EDIT = null;
+function courseHit(q, c) {
+  var n = String(q || '').toLowerCase();
+  if (!n) return false;
+  return String(c.code || '').toLowerCase().indexOf(n) >= 0 || String(c.folder || '').toLowerCase().indexOf(n) >= 0 || String(c.name || '').toLowerCase().indexOf(n) >= 0;
+}
+function shortToken(c) {
+  var f = String(c.folder || '');
+  var out = '';
+  for (var i = 0; i < f.length; i++) { var code = f.charCodeAt(i); if (code < 48 || code > 57) break; out += f[i]; }
+  return out || c.code || f;
+}
+function watchRuleMeta(r) {
+  var bits = [];
+  bits.push(r.courses && r.courses.length ? r.courses.join(' / ') : t('watchAllCourses'));
+  bits.push(r.days && r.days.length ? r.days.map(function (d) { return t('watchDayShort')[d - 1]; }).join(' ') : t('watchEveryDay'));
+  if (r.start && r.end) bits.push(r.start + '-' + r.end);
+  if (r.from || r.to) bits.push((r.from || '…') + '~' + (r.to || '…'));
+  bits.push(t('watchEvery') + Math.round((r.intervalSec || 180) / 60) + t('watchMin'));
+  return bits.join(' · ');
+}
+function hkStamp(iso) {
+  try { return new Date(iso).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }); }
+  catch (e) { return String(iso || ''); }
+}
+function clearNode(node) { while (node && node.firstChild) node.removeChild(node.firstChild); }
+function renderWatchStrip() {
+  var box = document.getElementById('watchStrip');
+  if (!box) return;
+  clearNode(box);
+  if (!DATA || !DATA.watch || !DATA.watch.total) return;
+  var w = DATA.watch;
+  box.appendChild(el('span', 'watchdot' + (w.active ? ' on' : '')));
+  var label = !w.enabled ? t('watchPaused') : (w.active ? t('watchActive') : t('watchIdle'));
+  box.appendChild(el('span', '', label + ' ' + w.active + '/' + w.total));
+  var names = (w.rules || []).filter(function (r) { return r.active; }).map(function (r) { return r.label; });
+  if (names.length) box.appendChild(el('span', '', names.slice(0, 3).join('、') + (names.length > 3 ? ' …' : '')));
+  box.appendChild(el('span', '', t('watchLastScan') + (w.lastScanAt ? hkStamp(w.lastScanAt) : t('watchNever'))));
+}
+function renderWatchHits() {
+  var root = document.getElementById('watchHits');
+  if (!root) return;
+  clearNode(root);
+  if (!DATA || !DATA.watch || !DATA.watch.pendingCount) return;
+  var w = DATA.watch;
+  var card = el('div', 'card watchhits');
+  card.appendChild(el('h2', 'first', t('watchPendingTitle') + ' (' + w.pendingCount + ')'));
+  (w.pending || []).forEach(function (p) {
+    var row = el('div', 'watchhit');
+    row.appendChild(el('span', 'badge', p.courseLabel || ''));
+    row.appendChild(el('span', 't', p.title || ''));
+    row.appendChild(el('span', p.kind === 'changed' ? 'chip warn' : 'chip bad', p.kind === 'changed' ? t('watchHitChanged') : t('watchHitNew')));
+    if (p.dueAt) row.appendChild(el('span', 'hint', hkStamp(p.dueAt)));
+    if (p.url) { var a = el('a', 'btn ghost', t('open')); a.href = p.url; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
+    var ok = el('button', 'btn ghost', t('watchAck'));
+    ok.onclick = function () { watchPost({ action: 'ack', id: p.id }); };
+    row.appendChild(ok);
+    card.appendChild(row);
+  });
+  var all = el('button', 'btn', t('watchAckAll'));
+  all.onclick = function () { watchPost({ action: 'ack', all: true }); };
+  card.appendChild(all);
+  root.appendChild(card);
+}
+function renderWatchList() {
+  var root = document.getElementById('watchList');
+  if (!root) return;
+  clearNode(root);
+  var rules = (WATCH && WATCH.rules) || [];
+  if (!rules.length) { root.appendChild(el('p', 'hint', t('watchNoRules'))); return; }
+  rules.forEach(function (r) {
+    var row = el('div', 'watchrule');
+    var left = el('div', '');
+    var head = el('div', '');
+    var dot = el('span', 'watchdot' + (r.active ? ' on' : ''));
+    dot.style.marginRight = '8px';
+    head.appendChild(dot);
+    head.appendChild(el('strong', '', r.label));
+    left.appendChild(head);
+    left.appendChild(el('div', 'meta', watchRuleMeta(r)));
+    var extra = [r.lastScanAt ? (t('watchLastScan') + hkStamp(r.lastScanAt)) : t('watchNever')];
+    if (r.hitCount) extra.push('命中 ' + r.hitCount);
+    if (r.enabled === false) extra.push(t('watchPaused'));
+    left.appendChild(el('div', 'meta', extra.join(' · ')));
+    row.appendChild(left);
+    var ops = el('div', 'ops');
+    var b1 = el('button', 'btn ghost', t('watchEdit'));
+    b1.onclick = function () { watchEditRule(r.id); };
+    ops.appendChild(b1);
+    var b2 = el('button', 'btn ghost', r.enabled === false ? t('watchEnable') : t('watchPause'));
+    b2.onclick = function () { watchPost({ action: 'toggle', id: r.id, enabled: r.enabled === false }); };
+    ops.appendChild(b2);
+    var b3 = el('button', 'btn ghost', t('watchRemove'));
+    b3.onclick = function () { if (window.confirm(r.label + ' ?')) watchPost({ action: 'delete', id: r.id }); };
+    ops.appendChild(b3);
+    row.appendChild(ops);
+    root.appendChild(row);
+  });
+}
+function loadWatch() {
+  return fetch('/api/watches').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d || !d.ok) return;
+    WATCH = d;
+    renderWatchList();
+  }).catch(function () {});
+}
+function watchPost(body) {
+  var msg = document.getElementById('watchMsg');
+  return fetch('/api/watches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.ok) { if (msg) msg.textContent = (d && d.error) || t('reqFailed'); return d; }
+      WATCH = d;
+      renderWatchList();
+      if (body.action === 'delete') { if (msg) msg.textContent = t('watchDeleted'); document.getElementById('watchEditor').style.display = 'none'; }
+      if (body.action === 'scan-now') { if (msg) msg.textContent = d.hits ? (t('watchScanned') + d.hits) : t('watchScanNone'); }
+      return loadState();
+    })
+    .catch(function () {});
+}
+function watchFillSelect(id, values, labelFn) {
+  var sel = document.getElementById(id);
+  clearNode(sel);
+  values.forEach(function (v) {
+    var o = document.createElement('option');
+    o.value = String(v);
+    o.textContent = labelFn(v);
+    sel.appendChild(o);
+  });
+}
+function initWatchSelects() {
+  watchFillSelect('weInterval', [60, 120, 180, 300, 600, 900, 1800], function (v) { return (v / 60) + t('watchMin'); });
+  watchFillSelect('weRepeat', [0, 3, 5, 10, 15, 30], function (v) { return v ? (v + t('watchMin')) : t('watchRepeatOff'); });
+  watchFillSelect('weMaxRepeat', [0, 1, 2, 3, 5], function (v) { return v + t('watchTimesUnit'); });
+}
+function weToggle(btn) { btn.classList.toggle('on'); }
+function watchNewRule() {
+  openWatchEditor({ label: '', courses: [], days: [], start: '', end: '', from: '', to: '', intervalSec: 180, repeatMinutes: 5, maxRepeats: 2, includeAnnouncements: true, alerts: { desktop: true, sound: true, lark: true }, enabled: true });
+}
+function watchEditRule(id) {
+  var r = ((WATCH && WATCH.rules) || []).filter(function (x) { return x.id === id; })[0];
+  if (r) openWatchEditor(r);
+}
+function openWatchEditor(rule) {
+  WATCH_EDIT = rule;
+  document.getElementById('watchEditor').style.display = '';
+  document.getElementById('watchMsg').textContent = '';
+  document.getElementById('weLabel').value = rule.label || '';
+  document.getElementById('weStart').value = rule.start || '';
+  document.getElementById('weEnd').value = rule.end || '';
+  document.getElementById('weFrom').value = rule.from || '';
+  document.getElementById('weTo').value = rule.to || '';
+  document.getElementById('weInterval').value = String(rule.intervalSec || 180);
+  document.getElementById('weRepeat').value = String(rule.repeatMinutes == null ? 5 : rule.repeatMinutes);
+  document.getElementById('weMaxRepeat').value = String(rule.maxRepeats == null ? 2 : rule.maxRepeats);
+  var al = rule.alerts || {};
+  document.getElementById('weDesktop').classList.toggle('on', al.desktop !== false);
+  document.getElementById('weSound').classList.toggle('on', al.sound !== false);
+  document.getElementById('weLark').classList.toggle('on', al.lark !== false);
+  document.getElementById('weAnn').classList.toggle('on', rule.includeAnnouncements !== false);
+  var cbox = document.getElementById('weCourses');
+  clearNode(cbox);
+  (DATA && DATA.courses ? DATA.courses : []).forEach(function (c) {
+    var val = shortToken(c);
+    var b = el('button', 'chipsel', c.code ? (c.code + ' · ' + c.folder) : c.folder);
+    b.dataset.val = val;
+    if ((rule.courses || []).some(function (q) { return courseHit(q, c); }) || (rule.courses || []).indexOf(val) >= 0) b.classList.add('on');
+    b.onclick = function () { b.classList.toggle('on'); };
+    cbox.appendChild(b);
+  });
+  var dbox = document.getElementById('weDays');
+  clearNode(dbox);
+  for (var i = 1; i <= 7; i++) {
+    (function (d) {
+      var b = el('button', 'chipsel', t('watchDayShort')[d - 1]);
+      b.dataset.val = String(d);
+      if ((rule.days || []).indexOf(d) >= 0) b.classList.add('on');
+      b.onclick = function () { b.classList.toggle('on'); };
+      dbox.appendChild(b);
+    })(i);
+  }
+  document.getElementById('weDelete').style.display = rule.id ? '' : 'none';
+}
+function watchCancel() { document.getElementById('watchEditor').style.display = 'none'; }
+function watchDeleteEditing() { if (WATCH_EDIT && WATCH_EDIT.id) watchPost({ action: 'delete', id: WATCH_EDIT.id }); }
+function watchSave() {
+  var courses = [];
+  Array.prototype.forEach.call(document.querySelectorAll('#weCourses .chipsel.on'), function (b) { courses.push(b.dataset.val); });
+  var days = [];
+  Array.prototype.forEach.call(document.querySelectorAll('#weDays .chipsel.on'), function (b) { days.push(Number(b.dataset.val)); });
+  var rule = {
+    id: WATCH_EDIT && WATCH_EDIT.id, label: document.getElementById('weLabel').value,
+    courses: courses, days: days,
+    start: document.getElementById('weStart').value, end: document.getElementById('weEnd').value,
+    from: document.getElementById('weFrom').value, to: document.getElementById('weTo').value,
+    intervalSec: Number(document.getElementById('weInterval').value),
+    repeatMinutes: Number(document.getElementById('weRepeat').value),
+    maxRepeats: Number(document.getElementById('weMaxRepeat').value),
+    alerts: {
+      desktop: document.getElementById('weDesktop').classList.contains('on'),
+      sound: document.getElementById('weSound').classList.contains('on'),
+      lark: document.getElementById('weLark').classList.contains('on'),
+    },
+    includeAnnouncements: document.getElementById('weAnn').classList.contains('on'),
+    enabled: WATCH_EDIT && WATCH_EDIT.id ? WATCH_EDIT.enabled !== false : true,
+  };
+  watchPost({ action: 'save', rule: rule }).then(function (d) {
+    if (d && d.ok) {
+      document.getElementById('watchEditor').style.display = 'none';
+      document.getElementById('watchMsg').textContent = t('watchSaved');
+    }
+  });
+}
+function watchScanNow() {
+  var msg = document.getElementById('watchMsg');
+  if (msg) msg.textContent = t('watchScanning');
+  watchPost({ action: 'scan-now' });
+}
+
 // ---------- 手机配对 ----------
 var PAIR = null;
 var PAIR_EXPIRES = 0;
@@ -1198,6 +1520,8 @@ var BOOT_THEME = URL_PARAMS.get('theme');
 var BOOT_TAB = URL_PARAMS.get('tab');
 applyTheme(BOOT_THEME || localStorage.getItem('ch-theme') || '');
 applyLang(URL_PARAMS.get('lang') || LANG);
+initWatchSelects();
+loadWatch();
 loadState();
 loadSettings();
 renderInstallBar();
