@@ -2,6 +2,25 @@
 
 本项目遵循语义化版本（SemVer）。
 
+## v1.1.1 — 2026-10-24
+
+**桌面快捷入口**：记不住 `http://127.0.0.1:8788`？一条命令在桌面生成「一点就开」的图标。
+
+### 新增
+
+- `node cli.mjs shortcut`：在桌面创建看板入口
+  - **macOS**：`Canvas 课程看板.app` —— 双击先检查服务，没在跑就自动拉起（launchd → 兜底 node），再用默认浏览器打开；带看板自己的图标
+  - **Windows**：`Canvas 课程看板.url` + 同名 `.cmd` —— .cmd 用 Node 探活（绕开不可靠的 curl/schannel），没在跑就先拉起服务
+  - **Linux**：`canvas-hub.desktop` —— 可执行，自动拉起 + `xdg-open`
+- 新增自检 `scripts/selftest-shortcut.mjs`（7 项断言），已纳入 CI（macOS / Windows / Linux 全部执行）
+
+### 实现要点
+
+- macOS 上如果桌面启用了 iCloud「桌面与文稿」同步，`osacompile` 直接往桌面写会报 `-4960`（resource fork 被拒）；所以改为先在临时目录编译，再 `ditto` 过去
+- 图标复用看板运行时生成的图标（`src/icons.mjs`），用 `sips` + `iconutil` 打成 icns，再 `xattr -cr` + ad-hoc 签名，避免 Gatekeeper 提示"已损坏"
+- AppleScript 里的项目路径用 `quoted form of` 处理，路径含空格（例如 `cityU semA`）也安全
+- 生成器在 `config.json` 缺失时降级为默认端口 8788，不会因此失败
+
 ## v1.1.0 — 2026-09-14
 
 **高频盯防**：为「随堂 quiz」这类突发内容准备的 —— 自定义盯防窗口 + 更高频扫描 + 强提醒。

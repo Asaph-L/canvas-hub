@@ -85,6 +85,9 @@ The wizard asks for install directory, course-file directory, Canvas URL/token, 
     node cli.mjs doctor      # health check (run this first when something is off)
     node cli.mjs sync        # sync once
     node cli.mjs demo        # no token yet? generate demo data (demo --off to exit)
+    node cli.mjs shortcut    # put a one-click dashboard icon on your desktop
+
+Keep forgetting the URL? Run `node cli.mjs shortcut` once: you get a **Canvas 课程看板** entry on the desktop — on macOS a .app that checks/starts the service and then opens your browser, on Windows a .url plus a .cmd, on Linux a .desktop file.
 
 ## 🖥 Platform support
 
@@ -219,6 +222,7 @@ Why bother: deadlines become Feishu calendar events with reminders, all course d
 | `node cli.mjs demo [--off]` | Demo data on / off |
 | `node cli.mjs server` | Run the dashboard in the foreground |
 | `node cli.mjs watch [--status]` | High-frequency watch: scan now / print rule status |
+| `node cli.mjs shortcut` | Create a one-click dashboard shortcut on the desktop |
 
 ## ❓ FAQ
 

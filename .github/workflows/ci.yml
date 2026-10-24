@@ -56,6 +56,10 @@ jobs:
         shell: bash
         run: node scripts/selftest-watch.mjs
 
+      - name: Desktop shortcut self-test (macOS .app / Windows .url / Linux .desktop)
+        shell: bash
+        run: node scripts/selftest-shortcut.mjs
+
       - name: End-to-end smoke (demo data, report, dashboard)
         shell: bash
         run: |

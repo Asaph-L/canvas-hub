@@ -118,8 +118,12 @@ Windows（PowerShell）：
     node cli.mjs doctor      # 体检，出问题先跑这个
     node cli.mjs sync        # 手动同步一次
     node cli.mjs demo        # 没有 Token？先看演示数据（demo --off 退出）
+    node cli.mjs shortcut    # 在桌面建一个「一点就开」的看板图标
 
 打开 http://127.0.0.1:8788 即可使用看板 / 日历 / 对话 / 设置。
+
+> 记不住网址？跑一次 `node cli.mjs shortcut`，桌面会多出 **Canvas 课程看板**：
+> macOS 是一个 .app（双击自动检查/拉起服务再打开浏览器），Windows 是 .url + .cmd，Linux 是 .desktop。
 
 <details>
 <summary>无人值守安装（批量部署 / 脚本化）</summary>
@@ -275,6 +279,7 @@ Windows：
 | `node cli.mjs demo [--off]` | 演示数据开 / 关 |
 | `node cli.mjs server` | 前台启动 Web 看板 |
 | `node cli.mjs watch [--status]` | 高频盯防：立刻扫一次 / 只看规则状态 |
+| `node cli.mjs shortcut` | 在桌面创建「一点就开」的看板入口 |
 
 ## ❓ 常见问题
 
